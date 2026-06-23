@@ -1,4 +1,5 @@
 import { Allotment } from "allotment";
+import TerminalView from "./components/TerminalView";
 
 /** 占位面板：M0 阶段仅有结构与配色，内容在后续里程碑填充 */
 function Panel({
@@ -61,11 +62,20 @@ export default function App() {
             <Panel title="SKILL" hint="技能列表 + 搜索（占位 · M3）" />
           </Allotment.Pane>
           <Allotment.Pane minSize={360}>
-            <Panel
-              title="终端区"
-              hint="多终端 · 标签页 + 分屏（占位 · M1 / M2）"
-              bg="#0b0d11"
-            />
+            <div className="flex h-full w-full flex-col bg-[#0b0d11]">
+              <div className="flex shrink-0 items-center gap-2 border-b border-[#2a2f3a] px-3 py-2">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: "#d97757" }}
+                />
+                <span className="text-[11px] font-bold tracking-wider text-[#8a92a3]">
+                  终端1 · powershell
+                </span>
+              </div>
+              <div className="min-h-0 flex-1 p-1">
+                <TerminalView />
+              </div>
+            </div>
           </Allotment.Pane>
           <Allotment.Pane minSize={180} preferredSize={260} snap>
             <Panel title="MEMORY" hint="记忆列表（占位 · M3）" />
