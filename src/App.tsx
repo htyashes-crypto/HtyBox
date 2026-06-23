@@ -9,8 +9,8 @@ function WorkspaceTab({ name, active }: { name: string; active?: boolean }) {
       className={
         "cursor-pointer rounded-md px-3 py-1 text-xs transition-colors " +
         (active
-          ? "border border-[#3a4150] border-t-2 border-t-[#8b7cff] bg-[#20242c] text-[#e6e8ee]"
-          : "border border-[#2a2f3a] text-[#8a92a3] hover:bg-[#1b1f27] hover:text-[#b8bdc8]")
+          ? "border border-[#e5e2d9] border-t-2 border-t-[#d97757] bg-white text-[#191919]"
+          : "border border-[#e5e2d9] text-[#73726c] hover:bg-white hover:text-[#191919]")
       }
     >
       {name}
@@ -20,19 +20,19 @@ function WorkspaceTab({ name, active }: { name: string; active?: boolean }) {
 
 export default function App() {
   return (
-    <div className="flex h-screen w-screen flex-col bg-[#0f1115] text-[#e6e8ee]">
+    <div className="flex h-screen w-screen flex-col bg-[#faf9f5] text-[#191919]">
       {/* 顶部 workspace 标签栏（占位，M2.5 实装） */}
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[#2a2f3a] bg-[#161a21] px-3">
-        <div className="h-4 w-4 rounded bg-[#8b7cff]" />
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] px-3">
+        <div className="h-4 w-4 rounded bg-[#d97757]" />
         <span className="text-sm font-bold">HtyBox</span>
         <div className="ml-3 flex items-center gap-2">
           <WorkspaceTab name="workspace1" active />
           <WorkspaceTab name="workspace2" />
-          <span className="cursor-pointer rounded px-1.5 text-base text-[#8a92a3] hover:text-[#e6e8ee]">
+          <span className="cursor-pointer rounded px-1.5 text-base text-[#73726c] hover:text-[#191919]">
             +
           </span>
         </div>
-        <div className="ml-auto cursor-pointer rounded-md border border-[#3a3050] bg-[#8b7cff]/15 px-3 py-1 text-xs font-semibold text-[#8b7cff] transition-colors hover:bg-[#8b7cff]/25">
+        <div className="ml-auto cursor-pointer rounded-md border border-[#e8c8bb] bg-[#d97757]/12 px-3 py-1 text-xs font-semibold text-[#c15f3c] transition-colors hover:bg-[#d97757]/20">
           多 Agent 协作
         </div>
       </div>
@@ -53,7 +53,7 @@ export default function App() {
       </div>
 
       {/* 底部状态栏 */}
-      <div className="flex h-6 shrink-0 items-center border-t border-[#2a2f3a] bg-[#161a21] px-3 text-[10px] text-[#5c6478]">
+      <div className="flex h-6 shrink-0 items-center border-t border-[#e5e2d9] bg-[#f4f3ee] px-3 text-[10px] text-[#8c8a82]">
         三栏 · 多终端 · Skill/Memory 目录 · HtyBox v0.1
       </div>
     </div>

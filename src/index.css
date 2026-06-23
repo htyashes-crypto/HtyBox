@@ -8,18 +8,19 @@ body,
 }
 
 body {
-  background: #0f1115;
-  color: #e6e8ee;
+  background: #faf9f5;
+  color: #191919;
   font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
   overflow: hidden;
 }
 
+/* allotment 分隔条（奶油主题） */
 :root {
-  --separator-border: #2a2f3a;
-  --focus-border: #8b7cff;
+  --separator-border: #e5e2d9;
+  --focus-border: #d97757;
 }
 
-/* 细窄、低调的滚动条，贴合深色主题（WebView2 = Chromium 内核） */
+/* 细窄滚动条（浅色奶油主题） */
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -28,36 +29,44 @@ body {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: #2a2f3a;
+  background: #d8d5cc;
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #3a4150;
+  background: #c2beb2;
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-/* 拖拽落点高亮（skill/memory 拖到终端） */
-.htybox-drop {
-  outline: 2px solid #8b7cff;
-  outline-offset: -2px;
-  box-shadow: inset 0 0 0 9999px rgba(139, 124, 255, 0.07);
+/* 终端（暖深底）内的滚动条用更暗的色，避免浅色条压在深底上 */
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: #3a3631;
+}
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: #4a453f;
 }
 
-/* dockview 主题变量对齐 HtyBox 配色（默认是 VS Code 灰，和深蓝黑主题不协调） */
-.dockview-theme-dark {
-  --dv-group-view-background-color: #0b0d11;
-  --dv-tabs-and-actions-container-background-color: #0e1116;
-  --dv-activegroup-visiblepanel-tab-background-color: #161b22;
-  --dv-activegroup-hiddenpanel-tab-background-color: #0e1116;
-  --dv-inactivegroup-visiblepanel-tab-background-color: #0b0d11;
-  --dv-inactivegroup-hiddenpanel-tab-background-color: #0b0d11;
-  --dv-tab-divider-color: #2a2f3a;
-  --dv-separator-border: #2a2f3a;
-  --dv-paneview-active-outline-color: #8b7cff;
-  --dv-active-sash-color: #8b7cff;
+/* 拖拽落点高亮（陶土色） */
+.htybox-drop {
+  outline: 2px solid #d97757;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 9999px rgba(217, 119, 87, 0.08);
+}
+
+/* dockview 浅色主题对齐 Claude 奶油配色；终端面板内容区保持暖深 */
+.dockview-theme-light {
+  --dv-group-view-background-color: #1f1e1d;
+  --dv-tabs-and-actions-container-background-color: #f4f3ee;
+  --dv-activegroup-visiblepanel-tab-background-color: #faf9f5;
+  --dv-activegroup-hiddenpanel-tab-background-color: #ecebe2;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #f4f3ee;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #ecebe2;
+  --dv-tab-divider-color: #e5e2d9;
+  --dv-separator-border: #e5e2d9;
+  --dv-paneview-active-outline-color: #d97757;
+  --dv-active-sash-color: #d97757;
 }

@@ -10,7 +10,7 @@ export default function SearchBox({
   return (
     <div className="relative">
       <svg
-        className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-[#5c6478]"
+        className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-[#a8a29a]"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -25,7 +25,7 @@ export default function SearchBox({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-[#2a2f3a] bg-[#0f1115] py-1.5 pr-2 pl-8 text-xs text-[#e6e8ee] outline-none transition-colors placeholder:text-[#5c6478] focus:border-[#8b7cff]"
+        className="w-full rounded-lg border border-[#e5e2d9] bg-white py-1.5 pr-2 pl-8 text-xs text-[#191919] outline-none transition-colors placeholder:text-[#a8a29a] focus:border-[#d97757]"
       />
     </div>
   );

@@ -142,19 +142,19 @@ export default function TerminalDock() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col bg-[#0b0d11]">
-      <div className="flex shrink-0 items-center gap-2 border-b border-[#2a2f3a] px-3 py-1.5">
+    <div className="flex h-full w-full flex-col bg-[#1f1e1d]">
+      <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] px-3 py-1.5">
         <button
           onClick={addTerminal}
-          className="rounded-md border border-[#2a2f3a] px-2 py-1 text-xs text-[#b8bdc8] hover:bg-[#20242c]"
+          className="rounded-md border border-[#e5e2d9] bg-white px-2 py-1 text-xs text-[#3d3d3a] transition-colors hover:border-[#d4a27f] hover:text-[#191919]"
         >
           ＋ 新建终端
         </button>
-        <span className="text-[10px] text-[#5c6478]">
+        <span className="text-[10px] text-[#8c8a82]">
           拖标签到边缘可分屏 · 拖动可重排 · 拖 skill/memory 到终端注入(Shift=直接发送)
         </span>
       </div>
-      <div className="dockview-theme-dark min-h-0 flex-1">
+      <div className="dockview-theme-light min-h-0 flex-1">
         <DockviewReact components={components} onReady={onReady} />
       </div>
     </div>

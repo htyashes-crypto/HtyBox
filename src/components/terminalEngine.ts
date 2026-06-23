@@ -36,10 +36,10 @@ export function ensureEngine(termId: string, shell?: string): void {
     cursorBlink: true,
     scrollback: 5000,
     theme: {
-      background: "#0b0d11",
-      foreground: "#e6e8ee",
-      cursor: "#8b7cff",
-      selectionBackground: "#2a2f3a",
+      background: "#1f1e1d",
+      foreground: "#e5e2dc",
+      cursor: "#d97757",
+      selectionBackground: "#3a3631",
     },
   });
   const fit = new FitAddon();

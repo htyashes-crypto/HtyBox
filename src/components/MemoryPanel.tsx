@@ -8,10 +8,10 @@ import {
 import SearchBox from "./ui/SearchBox";
 
 const typeColor: Record<string, string> = {
-  user: "#22c55e",
-  feedback: "#f43f5e",
-  project: "#f59e0b",
-  reference: "#60a5fa",
+  user: "#2fa35e",
+  feedback: "#d6453e",
+  project: "#c15f3c",
+  reference: "#4f7cc4",
 };
 
 export default function MemoryPanel() {
@@ -45,20 +45,20 @@ export default function MemoryPanel() {
   }, [items, q]);
 
   return (
-    <div className="flex h-full flex-col bg-[#161a21]">
+    <div className="flex h-full flex-col bg-[#f4f3ee]">
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#8a92a3]">
+          <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#73726c]">
             Memory
           </span>
-          <span className="rounded-full bg-[#20242c] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a92a3]">
+          <span className="rounded-full bg-[#ecebe2] px-1.5 py-0.5 text-[10px] font-semibold text-[#73726c]">
             {items.length}
           </span>
         </div>
         <select
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
-          className="mt-2 w-full rounded-lg border border-[#2a2f3a] bg-[#0f1115] px-2 py-1.5 font-mono text-[11px] text-[#b8bdc8] outline-none focus:border-[#8b7cff]"
+          className="mt-2 w-full rounded-lg border border-[#e5e2d9] bg-white px-2 py-1.5 font-mono text-[11px] text-[#3d3d3a] outline-none focus:border-[#d97757]"
         >
           {projects.length === 0 && <option value="">（无 memory 项目）</option>}
           {projects.map((p) => (
@@ -73,12 +73,12 @@ export default function MemoryPanel() {
       </div>
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2.5 pb-3">
         {list.length === 0 && (
-          <div className="px-1 pt-6 text-center text-[11px] text-[#5c6478]">
+          <div className="px-1 pt-6 text-center text-[11px] text-[#a8a29a]">
             无 memory
           </div>
         )}
         {list.map((m) => {
-          const c = typeColor[m.memType] ?? "#8a92a3";
+          const c = typeColor[m.memType] ?? "#8c8a82";
           return (
             <div
               key={m.path}
@@ -91,10 +91,10 @@ export default function MemoryPanel() {
                 e.dataTransfer.effectAllowed = "copy";
               }}
               title={m.description}
-              className="cursor-grab rounded-lg border border-[#262b35] bg-[#1b1f27] px-3 py-2 transition-colors hover:border-[#3a4150] hover:bg-[#20242c] active:cursor-grabbing"
+              className="cursor-grab rounded-lg border border-[#e5e2d9] bg-white px-3 py-2 transition-colors hover:border-[#d4a27f] hover:bg-[#fbfaf7] active:cursor-grabbing"
             >
               <div className="flex items-center gap-2">
-                <span className="truncate text-[12.5px] font-semibold text-[#e6e8ee]">
+                <span className="truncate text-[12.5px] font-semibold text-[#191919]">
                   {m.name}
                 </span>
                 {m.memType && (
@@ -106,7 +106,7 @@ export default function MemoryPanel() {
                   </span>
                 )}
               </div>
-              <div className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-[#8a92a3]">
+              <div className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-[#73726c]">
                 {m.description}
               </div>
             </div>

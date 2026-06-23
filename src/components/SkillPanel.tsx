@@ -4,7 +4,7 @@ import SearchBox from "./ui/SearchBox";
 
 const sourceLabel = (s: string) => (s.startsWith("plugin:") ? "plugin" : s);
 const sourceColor = (s: string) =>
-  s.startsWith("plugin:") ? "#60a5fa" : s === "user" ? "#22c55e" : "#f59e0b";
+  s.startsWith("plugin:") ? "#4f7cc4" : s === "user" ? "#2fa35e" : "#c15f3c";
 
 export default function SkillPanel() {
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -28,12 +28,12 @@ export default function SkillPanel() {
   }, [skills, q]);
 
   return (
-    <div className="flex h-full flex-col bg-[#161a21]">
+    <div className="flex h-full flex-col bg-[#f4f3ee]">
       <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-        <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#8a92a3]">
+        <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#73726c]">
           Skill
         </span>
-        <span className="rounded-full bg-[#20242c] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a92a3]">
+        <span className="rounded-full bg-[#ecebe2] px-1.5 py-0.5 text-[10px] font-semibold text-[#73726c]">
           {skills.length}
         </span>
       </div>
@@ -42,10 +42,10 @@ export default function SkillPanel() {
       </div>
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2.5 pb-3">
         {err && (
-          <div className="px-1 text-[11px] text-[#f43f5e]">加载失败：{err}</div>
+          <div className="px-1 text-[11px] text-[#d6453e]">加载失败：{err}</div>
         )}
         {!err && list.length === 0 && (
-          <div className="px-1 pt-6 text-center text-[11px] text-[#5c6478]">
+          <div className="px-1 pt-6 text-center text-[11px] text-[#a8a29a]">
             无匹配 skill
           </div>
         )}
@@ -61,10 +61,10 @@ export default function SkillPanel() {
               e.dataTransfer.effectAllowed = "copy";
             }}
             title={`${s.invoke}\n${s.description}`}
-            className="cursor-grab rounded-lg border border-[#262b35] bg-[#1b1f27] px-3 py-2 transition-colors hover:border-[#3a4150] hover:bg-[#20242c] active:cursor-grabbing"
+            className="cursor-grab rounded-lg border border-[#e5e2d9] bg-white px-3 py-2 transition-colors hover:border-[#d4a27f] hover:bg-[#fbfaf7] active:cursor-grabbing"
           >
             <div className="flex items-center gap-2">
-              <span className="truncate text-[12.5px] font-semibold text-[#e6e8ee]">
+              <span className="truncate text-[12.5px] font-semibold text-[#191919]">
                 {s.name}
               </span>
               <span
@@ -77,7 +77,7 @@ export default function SkillPanel() {
                 {sourceLabel(s.source)}
               </span>
             </div>
-            <div className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-[#8a92a3]">
+            <div className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-[#73726c]">
               {s.description}
             </div>
           </div>
