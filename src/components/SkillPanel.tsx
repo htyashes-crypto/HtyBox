@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { listSkills, type Skill } from "../catalog";
 import SearchBox from "./ui/SearchBox";
+import { listen } from "@tauri-apps/api/event";
 
 const sourceLabel = (s: string) => (s.startsWith("plugin:") ? "plugin" : s);
 const sourceColor = (s: string) =>
@@ -12,9 +13,21 @@ export default function SkillPanel() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    listSkills()
-      .then(setSkills)
-      .catch((e) => setErr(String(e)));
+    let un: (() => void) | undefined;
+    let disposed = false;
+    const reload = () =>
+      listSkills()
+        .then(setSkills)
+        .catch((e) => setErr(String(e)));
+    reload();
+    listen("skills-changed", reload).then((u) => {
+      if (disposed) u();
+      else un = u;
+    });
+    return () => {
+      disposed = true;
+      un?.();
+    };
   }, []);
 
   const list = useMemo(() => {

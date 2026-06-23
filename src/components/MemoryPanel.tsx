@@ -6,6 +6,7 @@ import {
   type ProjectRef,
 } from "../catalog";
 import SearchBox from "./ui/SearchBox";
+import { listen } from "@tauri-apps/api/event";
 
 const typeColor: Record<string, string> = {
   user: "#2fa35e",
@@ -30,8 +31,21 @@ export default function MemoryPanel() {
   }, []);
 
   useEffect(() => {
-    if (slug) listMemories(slug).then(setItems).catch(() => setItems([]));
-    else setItems([]);
+    let un: (() => void) | undefined;
+    let disposed = false;
+    const reload = () => {
+      if (slug) listMemories(slug).then(setItems).catch(() => setItems([]));
+      else setItems([]);
+    };
+    reload();
+    listen("memory-changed", reload).then((u) => {
+      if (disposed) u();
+      else un = u;
+    });
+    return () => {
+      disposed = true;
+      un?.();
+    };
   }, [slug]);
 
   const list = useMemo(() => {

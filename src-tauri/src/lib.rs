@@ -1,5 +1,6 @@
 mod catalog;
 mod pty;
+mod watcher;
 
 use pty::{PtyManager, SpawnOptions};
 use tauri::ipc::Channel;
@@ -60,6 +61,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
+        .setup(|app| {
+            watcher::start(app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             create_terminal,
             write_terminal,
