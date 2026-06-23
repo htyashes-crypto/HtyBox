@@ -7,10 +7,10 @@ function WorkspaceTab({ name, active }: { name: string; active?: boolean }) {
   return (
     <div
       className={
-        "rounded-md px-3 py-1 text-xs " +
+        "cursor-pointer rounded-md px-3 py-1 text-xs transition-colors " +
         (active
           ? "border border-[#3a4150] border-t-2 border-t-[#8b7cff] bg-[#20242c] text-[#e6e8ee]"
-          : "border border-[#2a2f3a] text-[#8a92a3]")
+          : "border border-[#2a2f3a] text-[#8a92a3] hover:bg-[#1b1f27] hover:text-[#b8bdc8]")
       }
     >
       {name}
@@ -28,9 +28,11 @@ export default function App() {
         <div className="ml-3 flex items-center gap-2">
           <WorkspaceTab name="workspace1" active />
           <WorkspaceTab name="workspace2" />
-          <span className="px-1 text-base text-[#8a92a3]">+</span>
+          <span className="cursor-pointer rounded px-1.5 text-base text-[#8a92a3] hover:text-[#e6e8ee]">
+            +
+          </span>
         </div>
-        <div className="ml-auto rounded-md border border-[#3a3050] bg-[#8b7cff]/15 px-3 py-1 text-xs font-semibold text-[#8b7cff]">
+        <div className="ml-auto cursor-pointer rounded-md border border-[#3a3050] bg-[#8b7cff]/15 px-3 py-1 text-xs font-semibold text-[#8b7cff] transition-colors hover:bg-[#8b7cff]/25">
           多 Agent 协作
         </div>
       </div>
