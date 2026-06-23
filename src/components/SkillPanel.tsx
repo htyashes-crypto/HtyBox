@@ -50,6 +50,13 @@ export default function SkillPanel() {
           <div
             key={s.path}
             draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(
+                "application/x-htybox-item",
+                JSON.stringify({ kind: "skill", text: s.invoke }),
+              );
+              e.dataTransfer.effectAllowed = "copy";
+            }}
             title={`${s.invoke}\n${s.description}`}
             className="cursor-grab rounded-lg border border-[#2a2f3a] bg-[#20242c] px-3 py-2 hover:border-[#3a4150]"
           >

@@ -80,6 +80,13 @@ export default function MemoryPanel() {
             <div
               key={m.path}
               draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(
+                  "application/x-htybox-item",
+                  JSON.stringify({ kind: "memory", text: "@" + m.path }),
+                );
+                e.dataTransfer.effectAllowed = "copy";
+              }}
               title={m.description}
               className="cursor-grab rounded-lg border border-[#2a2f3a] bg-[#20242c] px-3 py-2 hover:border-[#3a4150]"
             >

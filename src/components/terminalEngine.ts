@@ -115,3 +115,8 @@ export function disposeEngine(termId: string): void {
   e.el.parentElement?.removeChild(e.el);
   engines.delete(termId);
 }
+
+/** 让某终端获得键盘焦点（拖拽注入后调用）。 */
+export function focusEngine(termId: string): void {
+  engines.get(termId)?.term.focus();
+}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   DockviewReact,
   type DockviewApi,
@@ -11,11 +12,14 @@ import {
   attachEngine,
   detachEngine,
   disposeEngine,
+  focusEngine,
 } from "./terminalEngine";
 
 type TermParams = { termId: string; shell?: string };
 
-/** dockview 面板：把对应 termId 的终端引擎挂进来 / 卸载时移出（不销毁）。 */
+const DRAG_MIME = "application/x-htybox-item";
+
+/** dockview 面板：挂终端引擎 + 作为 skill/memory 拖拽落点（M4 注入）。 */
 function DockTerminal(props: IDockviewPanelProps<TermParams>) {
   const { termId, shell } = props.params;
   const ref = useRef<HTMLDivElement>(null);
@@ -24,7 +28,44 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
     if (!c) return;
     ensureEngine(termId, shell);
     attachEngine(termId, c);
-    return () => detachEngine(termId);
+
+    const onDragOver = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes(DRAG_MIME)) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        c.classList.add("htybox-drop");
+      }
+    };
+    const onDragLeave = (e: DragEvent) => {
+      if (!c.contains(e.relatedTarget as Node | null))
+        c.classList.remove("htybox-drop");
+    };
+    const onDrop = (e: DragEvent) => {
+      const raw = e.dataTransfer?.getData(DRAG_MIME);
+      c.classList.remove("htybox-drop");
+      if (!raw) return;
+      e.preventDefault();
+      try {
+        const item = JSON.parse(raw) as { text: string };
+        // 注入：写入该终端 PTY；按住 Shift 落下则自动回车发送
+        const data = item.text + (e.shiftKey ? "\r" : "");
+        invoke("write_terminal", { id: termId, data }).catch(() => {});
+        focusEngine(termId);
+      } catch {
+        /* ignore */
+      }
+    };
+
+    c.addEventListener("dragover", onDragOver);
+    c.addEventListener("dragleave", onDragLeave);
+    c.addEventListener("drop", onDrop);
+
+    return () => {
+      c.removeEventListener("dragover", onDragOver);
+      c.removeEventListener("dragleave", onDragLeave);
+      c.removeEventListener("drop", onDrop);
+      detachEngine(termId);
+    };
   }, [termId, shell]);
   return <div ref={ref} className="h-full w-full" />;
 }
@@ -56,13 +97,11 @@ export default function TerminalDock() {
     const api = event.api;
     apiRef.current = api;
 
-    // 面板关闭 → 结束对应 PTY
     api.onDidRemovePanel((panel) => {
       const termId = (panel.params as { termId?: string } | undefined)?.termId;
       if (termId) disposeEngine(termId);
     });
 
-    // 布局变化 → 持久化（结构层；进程不持久，重启后重开）
     api.onDidLayoutChange(() => {
       try {
         localStorage.setItem(LAYOUT_KEY, JSON.stringify(api.toJSON()));
@@ -71,7 +110,6 @@ export default function TerminalDock() {
       }
     });
 
-    // 恢复上次布局，否则建默认两个并排终端
     let restored = false;
     const saved = localStorage.getItem(LAYOUT_KEY);
     if (saved) {
@@ -83,7 +121,7 @@ export default function TerminalDock() {
       }
     }
     if (restored) {
-      termNo = api.panels.length; // 新建从已有数量之后继续编号
+      termNo = api.panels.length;
     } else {
       const id1 = newId();
       api.addPanel({
@@ -113,7 +151,7 @@ export default function TerminalDock() {
           ＋ 新建终端
         </button>
         <span className="text-[10px] text-[#5c6478]">
-          拖标签到边缘可分屏 · 拖动可重排 · 关闭标签结束该终端
+          拖标签到边缘可分屏 · 拖动可重排 · 拖 skill/memory 到终端注入(Shift=直接发送)
         </span>
       </div>
       <div className="dockview-theme-dark min-h-0 flex-1">
