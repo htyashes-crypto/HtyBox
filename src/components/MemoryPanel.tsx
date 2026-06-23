@@ -86,7 +86,7 @@ export default function MemoryPanel() {
               onDragStart={(e) => {
                 e.dataTransfer.setData(
                   "application/x-htybox-item",
-                  JSON.stringify({ kind: "memory", text: "@" + m.path }),
+                  JSON.stringify({ kind: "memory", path: m.path }),
                 );
                 e.dataTransfer.effectAllowed = "copy";
               }}

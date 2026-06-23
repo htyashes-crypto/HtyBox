@@ -23,7 +23,11 @@ interface Engine {
 const engines = new Map<string, Engine>();
 
 /** 确保某 termId 的引擎存在（含后端 PTY）；已存在则忽略。 */
-export function ensureEngine(termId: string, shell?: string): void {
+export function ensureEngine(
+  termId: string,
+  shell?: string,
+  launchCmd?: string,
+): void {
   if (engines.has(termId)) return;
 
   const el = document.createElement("div");
@@ -53,9 +57,20 @@ export function ensureEngine(termId: string, shell?: string): void {
     id: termId,
     opts: { shell, cols: 80, rows: 24 },
     onOutput,
-  }).catch((err) =>
-    term.write(`\r\n\x1b[31m[create_terminal 失败] ${err}\x1b[0m\r\n`),
-  );
+  })
+    .then(() => {
+      // 等 shell 起到提示符，再自动发送启动命令（如 "claude\r"）
+      if (launchCmd) {
+        setTimeout(() => {
+          invoke("write_terminal", { id: termId, data: launchCmd }).catch(
+            () => {},
+          );
+        }, 600);
+      }
+    })
+    .catch((err) =>
+      term.write(`\r\n\x1b[31m[create_terminal 失败] ${err}\x1b[0m\r\n`),
+    );
 
   // 前端 → 后端：用户输入
   term.onData((data) =>

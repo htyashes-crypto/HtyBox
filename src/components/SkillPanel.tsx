@@ -56,7 +56,7 @@ export default function SkillPanel() {
             onDragStart={(e) => {
               e.dataTransfer.setData(
                 "application/x-htybox-item",
-                JSON.stringify({ kind: "skill", text: s.invoke }),
+                JSON.stringify({ kind: "skill", invoke: s.invoke, path: s.path }),
               );
               e.dataTransfer.effectAllowed = "copy";
             }}
