@@ -67,7 +67,8 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
       detachEngine(termId);
     };
   }, [termId, shell]);
-  return <div ref={ref} className="h-full w-full" />;
+  // 内边距 + 终端底色：避免 xterm 内容贴边导致首列被面板边缘裁切
+  return <div ref={ref} className="h-full w-full bg-[#1f1e1d] p-2" />;
 }
 
 const components = { terminal: DockTerminal };
