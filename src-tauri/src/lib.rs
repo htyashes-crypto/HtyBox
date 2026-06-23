@@ -1,3 +1,4 @@
+mod catalog;
 mod pty;
 
 use pty::{PtyManager, SpawnOptions};
@@ -39,6 +40,21 @@ fn close_terminal(state: State<'_, AppState>, id: String) -> Result<(), String> 
     state.pty.close(&id)
 }
 
+#[tauri::command]
+fn list_skills(project_dir: Option<String>) -> Vec<catalog::Skill> {
+    catalog::scan_skills(project_dir.as_deref())
+}
+
+#[tauri::command]
+fn list_memories(slug: String) -> Vec<catalog::MemoryItem> {
+    catalog::scan_memories(&slug)
+}
+
+#[tauri::command]
+fn list_projects() -> Vec<catalog::ProjectRef> {
+    catalog::list_projects()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -48,7 +64,10 @@ pub fn run() {
             create_terminal,
             write_terminal,
             resize_terminal,
-            close_terminal
+            close_terminal,
+            list_skills,
+            list_memories,
+            list_projects
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

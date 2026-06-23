@@ -33,6 +33,8 @@ const components = { terminal: DockTerminal };
 
 let seq = 0;
 const newId = () => `t-${Date.now().toString(36)}-${(seq++).toString(36)}`;
+let termNo = 0;
+const nextTitle = () => `终端${++termNo}`; // 单调递增，避免重名
 const LAYOUT_KEY = "htybox.dock.layout.v1";
 
 export default function TerminalDock() {
@@ -45,7 +47,7 @@ export default function TerminalDock() {
     api.addPanel({
       id,
       component: "terminal",
-      title: `终端${api.panels.length + 1}`,
+      title: nextTitle(),
       params: { termId: id },
     });
   }, []);
@@ -80,19 +82,21 @@ export default function TerminalDock() {
         restored = false;
       }
     }
-    if (!restored) {
+    if (restored) {
+      termNo = api.panels.length; // 新建从已有数量之后继续编号
+    } else {
       const id1 = newId();
       api.addPanel({
         id: id1,
         component: "terminal",
-        title: "终端1",
+        title: nextTitle(),
         params: { termId: id1 },
       });
       const id2 = newId();
       api.addPanel({
         id: id2,
         component: "terminal",
-        title: "终端2",
+        title: nextTitle(),
         params: { termId: id2 },
         position: { referencePanel: id1, direction: "right" },
       });

@@ -1,27 +1,7 @@
 import { Allotment } from "allotment";
 import TerminalDock from "./components/TerminalDock";
-
-/** 占位面板：M0 阶段仅有结构与配色，内容在后续里程碑填充 */
-function Panel({
-  title,
-  hint,
-  bg = "#161a21",
-}: {
-  title: string;
-  hint: string;
-  bg?: string;
-}) {
-  return (
-    <div className="flex h-full w-full flex-col" style={{ background: bg }}>
-      <div className="border-b border-[#2a2f3a] px-3 py-2 text-[11px] font-bold tracking-wider text-[#8a92a3]">
-        {title}
-      </div>
-      <div className="flex flex-1 items-center justify-center px-4 text-center text-sm text-[#5c6478]">
-        {hint}
-      </div>
-    </div>
-  );
-}
+import SkillPanel from "./components/SkillPanel";
+import MemoryPanel from "./components/MemoryPanel";
 
 function WorkspaceTab({ name, active }: { name: string; active?: boolean }) {
   return (
@@ -59,20 +39,20 @@ export default function App() {
       <div className="min-h-0 flex-1">
         <Allotment proportionalLayout={false}>
           <Allotment.Pane minSize={180} preferredSize={260} snap>
-            <Panel title="SKILL" hint="技能列表 + 搜索（占位 · M3）" />
+            <SkillPanel />
           </Allotment.Pane>
           <Allotment.Pane minSize={360}>
             <TerminalDock />
           </Allotment.Pane>
           <Allotment.Pane minSize={180} preferredSize={260} snap>
-            <Panel title="MEMORY" hint="记忆列表（占位 · M3）" />
+            <MemoryPanel />
           </Allotment.Pane>
         </Allotment>
       </div>
 
-      {/* 底部状态栏（占位） */}
+      {/* 底部状态栏 */}
       <div className="flex h-6 shrink-0 items-center border-t border-[#2a2f3a] bg-[#161a21] px-3 text-[10px] text-[#5c6478]">
-        M0 脚手架 · 三栏可拖拽调宽 · HtyBox v0.1
+        三栏 · 多终端 · Skill/Memory 目录 · HtyBox v0.1
       </div>
     </div>
   );
