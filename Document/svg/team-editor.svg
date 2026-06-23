@@ -1,0 +1,157 @@
+<svg viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif; }
+      .mono { font-family: 'Consolas', 'Menlo', monospace; }
+      .ink-1 { fill: #e6e8ee; } .ink-2 { fill: #b8bdc8; } .ink-3 { fill: #8a92a3; } .ink-4 { fill: #5c6478; }
+      .brand { fill: #8b7cff; } .claude { fill: #d97757; } .codex { fill: #10a37f; }
+      .ok { fill: #22c55e; } .warn { fill: #f59e0b; } .err { fill: #f43f5e; } .info { fill: #60a5fa; }
+      .panel { fill: #161a21; } .card { fill: #1b1f27; stroke: #2a2f3a; stroke-width: 1; }
+      .sep { stroke: #2a2f3a; stroke-width: 1; }
+      .title { font-size: 16px; font-weight: 700; fill: #e6e8ee; }
+      .flabel { font-size: 10.5px; font-weight: 700; fill: #8a92a3; letter-spacing: 0.4px; }
+      .input { fill: #0f1115; stroke: #2a2f3a; stroke-width: 1; }
+      .ival { font-size: 12.5px; fill: #e6e8ee; }
+      .btn-p { fill: #8b7cff; } .btn-g { fill: transparent; stroke: #2a2f3a; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="900" fill="#0f1115"/>
+
+  <!-- 顶栏 -->
+  <rect width="1440" height="44" class="panel"/>
+  <line x1="0" y1="44" x2="1440" y2="44" class="sep"/>
+  <rect x="16" y="14" width="16" height="16" rx="4" class="brand" opacity="0.9"/>
+  <text x="40" y="27" font-size="14" font-weight="700" class="ink-1">HtyBox</text>
+  <text x="120" y="28" font-size="12.5" class="ink-3">多 Agent 协作</text>
+  <text x="232" y="28" font-size="12.5" class="ink-4">/ 团队库 /</text>
+  <text x="316" y="28" font-size="12.5" font-weight="700" class="brand">编辑团队</text>
+  <text x="1408" y="30" font-size="13" class="ink-3">✕</text>
+
+  <!-- 标题 + 团队名/描述 -->
+  <text x="28" y="86" class="title" font-size="20">编辑团队</text>
+  <text x="28" y="118" class="flabel">团队名</text>
+  <rect x="28" y="126" width="380" height="36" rx="8" class="input"/>
+  <text x="44" y="149" class="ival">标准开发三人组</text>
+  <text x="428" y="118" class="flabel">描述</text>
+  <rect x="428" y="126" width="540" height="36" rx="8" class="input"/>
+  <text x="444" y="149" class="ival ink-3">需求→调研→计划，最常用的开发协作组</text>
+
+  <!-- ============ 成员卡片 ============ -->
+  <!-- 成员 1 (Lead) -->
+  <rect x="28" y="180" width="940" height="148" rx="12" class="card"/>
+  <rect x="28" y="180" width="4" height="148" rx="2" class="claude"/>
+  <text x="48" y="208" font-size="13" font-weight="700" class="ink-2">成员 1</text>
+  <circle cx="858" cy="203" r="7" fill="transparent" stroke="#8b7cff" stroke-width="2"/>
+  <circle cx="858" cy="203" r="3.5" class="brand"/>
+  <text x="874" y="207" font-size="12" font-weight="600" class="brand">Lead（编排者）</text>
+  <text x="944" y="208" font-size="13" class="err">🗑</text>
+  <!-- 行: 角色名 / 类型 / 模型 -->
+  <text x="48" y="238" class="flabel">角色名（身份）</text>
+  <rect x="48" y="246" width="236" height="34" rx="8" class="input"/>
+  <text x="62" y="268" class="ival">负责人</text>
+  <text x="304" y="238" class="flabel">agent 类型</text>
+  <rect x="304" y="246" width="236" height="34" rx="8" class="input"/>
+  <circle cx="320" cy="263" r="4" class="claude"/>
+  <text x="332" y="268" class="ival">ClaudeCode</text>
+  <text x="526" y="268" font-size="10" class="ink-4">▾</text>
+  <text x="560" y="238" class="flabel">模型（随类型联动）</text>
+  <rect x="560" y="246" width="236" height="34" rx="8" fill="#0f1115" stroke="#8b7cff"/>
+  <text x="574" y="268" class="ival">opus-4-8</text>
+  <text x="782" y="268" font-size="10" class="brand">▾</text>
+  <!-- 行: 职责 -->
+  <text x="48" y="300" class="flabel">职责内容（注入为该 agent 的角色）</text>
+  <rect x="816" y="246" width="128" height="34" rx="8" class="input"/>
+  <text x="880" y="268" font-size="11" class="ink-4" text-anchor="middle">cwd: 默认</text>
+  <rect x="48" y="306" width="896" height="14" rx="0" fill="transparent"/>
+  <text x="48" y="318" class="ival ink-2" font-size="12">主任务需求；拆解任务、派活、汇总结果</text>
+
+  <!-- 成员 2 -->
+  <rect x="28" y="340" width="940" height="120" rx="12" class="card"/>
+  <rect x="28" y="340" width="4" height="120" rx="2" class="codex"/>
+  <text x="48" y="368" font-size="13" font-weight="700" class="ink-2">成员 2</text>
+  <circle cx="858" cy="363" r="7" fill="transparent" stroke="#3a4150" stroke-width="2"/>
+  <text x="874" y="367" font-size="12" class="ink-3">Lead（编排者）</text>
+  <text x="944" y="368" font-size="13" class="err">🗑</text>
+  <text x="48" y="398" class="flabel">角色名（身份）</text>
+  <rect x="48" y="406" width="236" height="34" rx="8" class="input"/>
+  <text x="62" y="428" class="ival">维护员</text>
+  <text x="304" y="398" class="flabel">agent 类型</text>
+  <rect x="304" y="406" width="236" height="34" rx="8" class="input"/>
+  <circle cx="320" cy="423" r="4" class="codex"/>
+  <text x="332" y="428" class="ival">Codex</text>
+  <text x="526" y="428" font-size="10" class="ink-4">▾</text>
+  <text x="560" y="398" class="flabel">模型（随类型联动）</text>
+  <rect x="560" y="406" width="236" height="34" rx="8" class="input"/>
+  <text x="574" y="428" class="ival">gpt-5.5</text>
+  <text x="782" y="428" font-size="10" class="ink-4">▾</text>
+  <rect x="816" y="406" width="128" height="34" rx="8" class="input"/>
+  <text x="880" y="428" font-size="11" class="ink-4" text-anchor="middle">cwd: 默认</text>
+  <text x="48" y="455" class="ival ink-2" font-size="12">探索/维护当前代码现状、回报代码事实</text>
+
+  <!-- 成员 3 -->
+  <rect x="28" y="472" width="940" height="120" rx="12" class="card"/>
+  <rect x="28" y="472" width="4" height="120" rx="2" class="claude"/>
+  <text x="48" y="500" font-size="13" font-weight="700" class="ink-2">成员 3</text>
+  <circle cx="858" cy="495" r="7" fill="transparent" stroke="#3a4150" stroke-width="2"/>
+  <text x="874" y="499" font-size="12" class="ink-3">Lead（编排者）</text>
+  <text x="944" y="500" font-size="13" class="err">🗑</text>
+  <text x="48" y="530" class="flabel">角色名（身份）</text>
+  <rect x="48" y="538" width="236" height="34" rx="8" class="input"/>
+  <text x="62" y="560" class="ival">计划书写员</text>
+  <text x="304" y="530" class="flabel">agent 类型</text>
+  <rect x="304" y="538" width="236" height="34" rx="8" class="input"/>
+  <circle cx="320" cy="555" r="4" class="claude"/>
+  <text x="332" y="560" class="ival">ClaudeCode</text>
+  <text x="526" y="560" font-size="10" class="ink-4">▾</text>
+  <text x="560" y="530" class="flabel">模型（随类型联动）</text>
+  <rect x="560" y="538" width="236" height="34" rx="8" class="input"/>
+  <text x="574" y="560" class="ival">opus-4-8</text>
+  <text x="782" y="560" font-size="10" class="ink-4">▾</text>
+  <rect x="816" y="538" width="128" height="34" rx="8" class="input"/>
+  <text x="880" y="560" font-size="11" class="ink-4" text-anchor="middle">cwd: 默认</text>
+  <text x="48" y="587" class="ival ink-2" font-size="12">书写计划并整合所有需求</text>
+
+  <!-- + 添加成员 -->
+  <rect x="28" y="604" width="940" height="48" rx="12" fill="transparent" stroke="#2a2f3a" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="498" y="633" font-size="13" font-weight="600" class="ink-3" text-anchor="middle">＋ 添加成员</text>
+
+  <!-- 底部操作 -->
+  <line x1="28" y1="690" x2="968" y2="690" class="sep"/>
+  <rect x="788" y="708" width="84" height="40" rx="8" class="btn-g"/>
+  <text x="830" y="733" font-size="13" class="ink-2" text-anchor="middle">取消</text>
+  <rect x="884" y="708" width="84" height="40" rx="8" class="btn-p"/>
+  <text x="926" y="733" font-size="13" font-weight="700" fill="#0f1115" text-anchor="middle">保存</text>
+
+  <!-- ============ 右侧提示面板 ============ -->
+  <rect x="1000" y="180" width="416" height="568" rx="14" class="panel" stroke="#2a2f3a"/>
+  <text x="1024" y="212" class="title" font-size="14">配置说明</text>
+  <line x1="1024" y1="226" x2="1392" y2="226" class="sep"/>
+
+  <text x="1024" y="254" class="flabel">类型 → 可选模型（联动）</text>
+  <rect x="1024" y="266" width="368" height="46" rx="8" fill="#1b1f27" stroke="#2a2f3a"/>
+  <circle cx="1042" cy="283" r="4" class="claude"/>
+  <text x="1054" y="287" font-size="11.5" class="ink-2">ClaudeCode</text>
+  <text x="1150" y="287" font-size="11" class="mono ink-3">opus-4-8 / sonnet-4-6 / haiku-4-5</text>
+  <line x1="1024" y1="289" x2="1392" y2="289" stroke="#2a2f3a"/>
+  <circle cx="1042" cy="302" r="4" class="codex"/>
+  <text x="1054" y="306" font-size="11.5" class="ink-2">Codex</text>
+  <text x="1150" y="306" font-size="11" class="mono ink-3">gpt-5.5 / …</text>
+
+  <text x="1024" y="346" class="flabel">规则</text>
+  <text x="1024" y="370" font-size="11.5" class="ink-3">• 整队<tspan class="brand" font-weight="700"> 恰好一个 Lead</tspan>（编排者）</text>
+  <text x="1024" y="392" font-size="11.5" class="ink-3">• 选类型后模型下拉自动联动刷新</text>
+  <text x="1024" y="414" font-size="11.5" class="ink-3">• 模型清单可在设置里维护</text>
+
+  <rect x="1024" y="440" width="368" height="120" rx="10" fill="rgba(139,124,255,0.08)" stroke="rgba(139,124,255,0.28)"/>
+  <text x="1040" y="464" font-size="11.5" font-weight="700" class="brand">“职责内容”会发生什么？</text>
+  <text x="1040" y="486" font-size="11" class="ink-3">保存后，每个成员的职责会作为</text>
+  <text x="1040" y="505" font-size="11" class="ink-3">HtyBox 协作协议的一部分，在一键</text>
+  <text x="1040" y="524" font-size="11" class="ink-3">开启时注入对应终端的 agent —— </text>
+  <text x="1040" y="543" font-size="11" class="ink-3">它不是 skill，不会出现在左栏列表。</text>
+
+  <text x="1024" y="592" class="flabel">预览</text>
+  <text x="1024" y="616" font-size="11" class="mono ink-2">终端1 👑负责人 · claude·opus (Lead)</text>
+  <text x="1024" y="636" font-size="11" class="mono ink-2">终端2 🔧维护员 · codex·gpt5.5</text>
+  <text x="1024" y="656" font-size="11" class="mono ink-2">终端3 📝计划书写员 · claude·opus</text>
+</svg>

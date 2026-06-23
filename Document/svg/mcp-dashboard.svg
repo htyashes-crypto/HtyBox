@@ -1,0 +1,223 @@
+<svg viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif; }
+      .mono { font-family: 'Consolas', 'Menlo', monospace; }
+      .ink-1 { fill: #e6e8ee; } .ink-2 { fill: #b8bdc8; } .ink-3 { fill: #8a92a3; } .ink-4 { fill: #5c6478; }
+      .brand { fill: #8b7cff; } .claude { fill: #d97757; } .codex { fill: #10a37f; }
+      .ok { fill: #22c55e; } .warn { fill: #f59e0b; } .err { fill: #f43f5e; } .info { fill: #60a5fa; }
+      .panel { fill: #161a21; stroke: #2a2f3a; stroke-width: 1; } .card { fill: #20242c; stroke: #2a2f3a; stroke-width: 1; }
+      .sep { stroke: #2a2f3a; stroke-width: 1; }
+      .h-label { font-size: 11px; font-weight: 700; fill: #8a92a3; letter-spacing: 1px; }
+      .col { font-size: 10px; font-weight: 700; fill: #5c6478; letter-spacing: 0.5px; }
+      .big { font-size: 24px; font-weight: 700; fill: #e6e8ee; }
+      .badge { font-size: 9.5px; font-weight: 700; }
+      .m11 { font-size: 11px; } .m105 { font-size: 10.5px; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="900" fill="#0f1115"/>
+
+  <!-- 顶栏 -->
+  <rect width="1440" height="44" class="panel"/>
+  <line x1="0" y1="44" x2="1440" y2="44" class="sep"/>
+  <rect x="16" y="14" width="16" height="16" rx="4" class="brand" opacity="0.9"/>
+  <text x="40" y="27" font-size="14" font-weight="700" class="ink-1">HtyBox</text>
+  <text x="120" y="28" font-size="12.5" class="ink-3">多 Agent 协作</text>
+  <text x="510" y="28" font-size="12" class="ink-3">团队库</text>
+  <text x="588" y="28" font-size="12" class="ink-3">运行面板</text>
+  <rect x="684" y="11" width="116" height="22" rx="7" fill="rgba(139,124,255,0.16)"/>
+  <text x="694" y="28" font-size="12" font-weight="700" class="brand">MCP 仪表盘</text>
+  <text x="1408" y="30" font-size="13" class="ink-3">✕</text>
+
+  <!-- ===== 顶部 4 张状态卡 ===== -->
+  <!-- 1 MCP 服务器 -->
+  <rect x="24" y="60" width="336" height="86" rx="12" class="card"/>
+  <text x="40" y="82" class="h-label">MCP 服务器</text>
+  <rect x="312" y="70" width="32" height="20" rx="6" fill="rgba(34,197,94,0.16)"/>
+  <text x="328" y="84" font-size="12" class="ok" text-anchor="middle">↻</text>
+  <circle cx="46" cy="108" r="5" class="ok"/>
+  <text x="58" y="113" font-size="15" font-weight="700" class="ink-1">Running</text>
+  <text x="344" y="113" font-size="10.5" class="mono ink-4" text-anchor="end">uptime 04:32</text>
+  <text x="40" y="134" font-size="11" class="mono ink-3">127.0.0.1:7333 · HTTP(streamable)</text>
+
+  <!-- 2 已连接 agent -->
+  <rect x="376" y="60" width="336" height="86" rx="12" class="card"/>
+  <text x="392" y="82" class="h-label">已连接 AGENT</text>
+  <text x="392" y="118" class="big">3 <tspan font-size="14" class="ink-4">/ 3</tspan></text>
+  <text x="392" y="138" font-size="10.5" class="ok">全部握手完成</text>
+  <circle cx="676" cy="108" r="22" fill="none" stroke="#2a2f3a" stroke-width="4"/>
+  <circle cx="676" cy="108" r="22" fill="none" stroke="#22c55e" stroke-width="4" stroke-dasharray="138 0"/>
+
+  <!-- 3 工具调用 -->
+  <rect x="728" y="60" width="336" height="86" rx="12" class="card"/>
+  <text x="744" y="82" class="h-label">工具调用（累计）</text>
+  <text x="744" y="118" class="big">248</text>
+  <text x="744" y="138" font-size="10.5" class="ink-3">12 / min · 0 失败</text>
+  <!-- mini sparkline -->
+  <polyline points="900,132 916,124 932,128 948,116 964,122 980,108 996,118 1012,104 1028,112 1044,100"
+            fill="none" stroke="#60a5fa" stroke-width="2"/>
+
+  <!-- 4 告警 -->
+  <rect x="1080" y="60" width="336" height="86" rx="12" class="card"/>
+  <text x="1096" y="82" class="h-label">健康 / 自愈</text>
+  <text x="1096" y="118" class="big ok">0</text>
+  <text x="1096" y="138" font-size="10.5" class="ink-3">0 告警 · 替补 0 次 · 自愈就绪</text>
+  <text x="1400" y="100" font-size="10.5" class="mono ink-4" text-anchor="end">proto 2025-06-18</text>
+  <circle cx="1380" cy="124" r="5" class="ok"/>
+
+  <!-- ============ 左列 ============ -->
+  <!-- Panel A: Agent 对接情况 -->
+  <rect x="24" y="160" width="840" height="244" rx="14" class="panel"/>
+  <text x="40" y="188" class="h-label">AGENT 对接情况 · CONNECTIONS</text>
+  <text x="848" y="188" font-size="10.5" class="ok" text-anchor="end">3 connected</text>
+  <!-- 列头 -->
+  <text x="40" y="216" class="col">AGENT</text>
+  <text x="250" y="216" class="col">TOKEN</text>
+  <text x="372" y="216" class="col">连接</text>
+  <text x="478" y="216" class="col">能力</text>
+  <text x="580" y="216" class="col">STOP HOOK</text>
+  <text x="700" y="216" class="col">心跳</text>
+  <text x="780" y="216" class="col">调用</text>
+  <line x1="40" y1="226" x2="848" y2="226" class="sep"/>
+  <!-- row 负责人 -->
+  <circle cx="46" cy="252" r="4" class="claude"/>
+  <text x="58" y="256" font-size="12.5" font-weight="700" class="ink-1">负责人</text>
+  <text x="58" y="271" font-size="10" class="ink-4">claude · opus-4-8</text>
+  <text x="250" y="256" font-size="11" class="mono ink-3">sk‑…a91f</text>
+  <rect x="372" y="244" width="78" height="18" rx="6" fill="rgba(34,197,94,0.16)"/>
+  <text x="411" y="257" class="badge ok" text-anchor="middle">connected</text>
+  <text x="478" y="256" class="m105 info">tools ✓</text>
+  <text x="600" y="256" class="m105 ok" text-anchor="middle">✓ 已装</text>
+  <text x="712" y="256" class="m105 ink-2" text-anchor="middle">1s</text>
+  <text x="792" y="256" class="m105 ink-1" text-anchor="middle">96</text>
+  <line x1="40" y1="284" x2="848" y2="284" class="sep"/>
+  <!-- row 维护员 -->
+  <circle cx="46" cy="310" r="4" class="codex"/>
+  <text x="58" y="314" font-size="12.5" font-weight="700" class="ink-1">维护员</text>
+  <text x="58" y="329" font-size="10" class="ink-4">codex · gpt-5.5</text>
+  <text x="250" y="314" font-size="11" class="mono ink-3">sk‑…7c2d</text>
+  <rect x="372" y="302" width="78" height="18" rx="6" fill="rgba(34,197,94,0.16)"/>
+  <text x="411" y="315" class="badge ok" text-anchor="middle">connected</text>
+  <text x="478" y="314" class="m105 info">tools ✓</text>
+  <text x="600" y="314" class="m105 ink-4" text-anchor="middle">— 无 hook</text>
+  <text x="712" y="314" class="m105 ink-2" text-anchor="middle">2s</text>
+  <text x="792" y="314" class="m105 ink-1" text-anchor="middle">54</text>
+  <line x1="40" y1="342" x2="848" y2="342" class="sep"/>
+  <!-- row 计划书写员 -->
+  <circle cx="46" cy="368" r="4" class="claude"/>
+  <text x="58" y="372" font-size="12.5" font-weight="700" class="ink-1">计划书写员</text>
+  <text x="58" y="387" font-size="10" class="ink-4">claude · opus-4-8</text>
+  <text x="250" y="372" font-size="11" class="mono ink-3">sk‑…3e80</text>
+  <rect x="372" y="360" width="78" height="18" rx="6" fill="rgba(34,197,94,0.16)"/>
+  <text x="411" y="373" class="badge ok" text-anchor="middle">connected</text>
+  <text x="478" y="372" class="m105 info">tools ✓</text>
+  <text x="600" y="372" class="m105 ok" text-anchor="middle">✓ 已装</text>
+  <text x="712" y="372" class="m105 ink-2" text-anchor="middle">1s</text>
+  <text x="792" y="372" class="m105 ink-1" text-anchor="middle">98</text>
+
+  <!-- Panel B: 工具调用实时流 -->
+  <rect x="24" y="420" width="840" height="460" rx="14" class="panel"/>
+  <text x="40" y="448" class="h-label">工具调用 · 实时流</text>
+  <text x="848" y="448" font-size="10.5" class="ink-3" text-anchor="end">248 calls · live</text>
+  <!-- per-tool 计数 chips -->
+  <g font-size="10" font-weight="600">
+    <rect x="40" y="462" width="118" height="22" rx="7" fill="#20242c" stroke="#2a2f3a"/><text x="52" y="477" class="ink-2">send_message·42</text>
+    <rect x="166" y="462" width="106" height="22" rx="7" fill="#20242c" stroke="#2a2f3a"/><text x="178" y="477" class="ink-2">read_inbox·38</text>
+    <rect x="280" y="462" width="112" height="22" rx="7" fill="#20242c" stroke="#2a2f3a"/><text x="292" y="477" class="ink-2">await_next·47</text>
+    <rect x="400" y="462" width="112" height="22" rx="7" fill="#20242c" stroke="#2a2f3a"/><text x="412" y="477" class="ink-2">assign_task·12</text>
+    <rect x="520" y="462" width="124" height="22" rx="7" fill="#20242c" stroke="#2a2f3a"/><text x="532" y="477" class="ink-2">report_result·11</text>
+    <rect x="652" y="462" width="110" height="22" rx="7" fill="#20242c" stroke="#2a2f3a"/><text x="664" y="477" class="ink-2">claim_files·18</text>
+  </g>
+  <line x1="40" y1="500" x2="848" y2="500" class="sep"/>
+  <!-- log -->
+  <g class="mono" font-size="11">
+    <text x="40" y="524" class="ink-4">04:32:12</text><circle cx="118" cy="520" r="3.5" class="claude"/><text x="128" y="524" class="ink-3">计划书写员</text><text x="230" y="524" class="ink-2">read_shared("goal")</text><text x="848" y="524" class="ok" text-anchor="end">→ ok</text>
+    <text x="40" y="552" class="ink-4">04:32:10</text><circle cx="118" cy="548" r="3.5" class="codex"/><text x="128" y="552" class="ink-3">维护员</text><text x="230" y="552" class="ink-2">await_next()</text><text x="848" y="552" class="ink-3" text-anchor="end">→ parked</text>
+    <text x="40" y="580" class="ink-4">04:32:08</text><circle cx="118" cy="576" r="3.5" class="codex"/><text x="128" y="580" class="ink-3">维护员</text><text x="230" y="580" class="ink-2">report_result(t1)</text><text x="848" y="580" class="ok" text-anchor="end">→ ok · 唤醒负责人</text>
+    <text x="40" y="608" class="ink-4">04:31:56</text><circle cx="118" cy="604" r="3.5" class="brand"/><text x="128" y="608" class="brand">HtyBox</text><text x="230" y="608" class="ink-2">wake(负责人)</text><text x="848" y="608" class="brand" text-anchor="end">→ inject</text>
+    <text x="40" y="636" class="ink-4">04:31:55</text><circle cx="118" cy="632" r="3.5" class="claude"/><text x="128" y="636" class="ink-3">负责人</text><text x="230" y="636" class="ink-2">assign_task(书写员,t2)</text><text x="848" y="636" class="ok" text-anchor="end">→ ok</text>
+    <text x="40" y="664" class="ink-4">04:31:54</text><circle cx="118" cy="660" r="3.5" class="claude"/><text x="128" y="664" class="ink-3">负责人</text><text x="230" y="664" class="ink-2">read_inbox()</text><text x="848" y="664" class="info" text-anchor="end">→ 1 msg</text>
+    <text x="40" y="692" class="ink-4">04:31:40</text><circle cx="118" cy="688" r="3.5" class="brand"/><text x="128" y="692" class="brand">HtyBox</text><text x="230" y="692" class="ink-2">wake(计划书写员)</text><text x="848" y="692" class="brand" text-anchor="end">→ inject</text>
+    <text x="40" y="720" class="ink-4">04:31:20</text><circle cx="118" cy="716" r="3.5" class="codex"/><text x="128" y="720" class="ink-3">维护员</text><text x="230" y="720" class="ink-2">claim_files(Assets/Scripts)</text><text x="848" y="720" class="ok" text-anchor="end">→ ok</text>
+    <text x="40" y="748" class="ink-4">04:31:05</text><circle cx="118" cy="744" r="3.5" class="claude"/><text x="128" y="748" class="ink-3">负责人</text><text x="230" y="748" class="ink-2">assign_task(维护员,t1)</text><text x="848" y="748" class="ok" text-anchor="end">→ ok</text>
+    <text x="40" y="776" class="ink-4">04:30:50</text><circle cx="118" cy="772" r="3.5" class="codex"/><text x="128" y="776" class="ink-3">维护员</text><text x="230" y="776" class="ink-2">whoami()</text><text x="848" y="776" class="ink-3" text-anchor="end">→ role=worker</text>
+    <text x="40" y="804" class="ink-4">04:30:48</text><circle cx="118" cy="800" r="3.5" class="claude"/><text x="128" y="804" class="ink-3">负责人</text><text x="230" y="804" class="ink-2">write_shared("goal",…)</text><text x="848" y="804" class="ok" text-anchor="end">→ ok</text>
+    <text x="40" y="832" class="ink-4">04:30:45</text><circle cx="118" cy="828" r="3.5" class="info"/><text x="128" y="832" class="info">3 agents</text><text x="230" y="832" class="ink-2">initialize / handshake</text><text x="848" y="832" class="ok" text-anchor="end">→ ok</text>
+  </g>
+  <text x="40" y="866" font-size="10" class="ink-4">▼ 自动滚动 · 可按 agent / 工具 过滤</text>
+
+  <!-- ============ 右列 ============ -->
+  <!-- Panel C: 任务板 -->
+  <rect x="880" y="160" width="536" height="296" rx="14" class="panel"/>
+  <text x="896" y="188" class="h-label">任务板 · TASK BOARD</text>
+  <text x="1400" y="188" font-size="10.5" class="ink-3" text-anchor="end">5 tasks</text>
+  <line x1="896" y1="202" x2="1400" y2="202" class="sep"/>
+  <g>
+    <text x="896" y="228" class="m11 ink-1">t1 探索代码现状</text>
+    <text x="896" y="244" font-size="9.5" class="mono ink-4">Assets/Scripts (只读) · 维护员</text>
+    <rect x="1330" y="218" width="56" height="18" rx="6" fill="rgba(34,197,94,0.16)"/><text x="1358" y="231" class="badge ok" text-anchor="middle">done</text>
+    <line x1="896" y1="256" x2="1400" y2="256" class="sep"/>
+  </g>
+  <g>
+    <text x="896" y="280" class="m11 ink-1">t2 整合需求写重构计划</text>
+    <text x="896" y="296" font-size="9.5" class="mono ink-4">Docs/, Assets/Plans/ · 计划书写员</text>
+    <rect x="1326" y="270" width="60" height="18" rx="6" fill="rgba(96,165,250,0.16)"/><text x="1356" y="283" class="badge info" text-anchor="middle">doing</text>
+    <line x1="896" y1="308" x2="1400" y2="308" class="sep"/>
+  </g>
+  <g>
+    <text x="896" y="332" class="m11 ink-1">t3 汇总评审、确认方向</text>
+    <text x="896" y="348" font-size="9.5" class="mono ink-4">— · 负责人</text>
+    <rect x="1326" y="322" width="60" height="18" rx="6" fill="rgba(96,165,250,0.16)"/><text x="1356" y="335" class="badge info" text-anchor="middle">doing</text>
+    <line x1="896" y1="360" x2="1400" y2="360" class="sep"/>
+  </g>
+  <g>
+    <text x="896" y="384" class="m11 ink-2">t4 实现重构 Step 1</text>
+    <text x="896" y="400" font-size="9.5" class="mono ink-4">Assets/Scripts/Auth/ · 未派</text>
+    <rect x="1336" y="374" width="50" height="18" rx="6" fill="rgba(138,146,163,0.16)"/><text x="1361" y="387" class="badge ink-3" text-anchor="middle">todo</text>
+    <line x1="896" y1="412" x2="1400" y2="412" class="sep"/>
+  </g>
+  <g>
+    <text x="896" y="436" class="m11 ink-2">t5 写登录服务单元测试</text>
+    <text x="896" y="452" font-size="9.5" class="mono ink-4">Assets/Tests/ · 未派</text>
+    <rect x="1336" y="426" width="50" height="18" rx="6" fill="rgba(138,146,163,0.16)"/><text x="1361" y="439" class="badge ink-3" text-anchor="middle">todo</text>
+  </g>
+
+  <!-- Panel D: 协作数据 (MCP State) -->
+  <rect x="880" y="472" width="536" height="408" rx="14" class="panel"/>
+  <text x="896" y="500" class="h-label">协作数据 · MCP STATE</text>
+
+  <!-- 消息总线/信箱 -->
+  <text x="896" y="528" class="col">消息总线 / 信箱</text>
+  <text x="1400" y="528" font-size="10" class="ink-4" text-anchor="end">共路由 56 条</text>
+  <rect x="896" y="536" width="160" height="34" rx="8" class="card"/>
+  <text x="912" y="550" font-size="10" class="ink-3">负责人</text><text x="1040" y="558" font-size="13" font-weight="700" class="ink-2" text-anchor="end">0</text>
+  <rect x="1068" y="536" width="160" height="34" rx="8" class="card"/>
+  <text x="1084" y="550" font-size="10" class="ink-3">维护员</text><text x="1212" y="558" font-size="13" font-weight="700" class="ink-2" text-anchor="end">0</text>
+  <rect x="1240" y="536" width="160" height="34" rx="8" fill="rgba(245,158,11,0.10)" stroke="rgba(245,158,11,0.30)"/>
+  <text x="1256" y="550" font-size="10" class="ink-3">计划书写员</text><text x="1384" y="558" font-size="13" font-weight="700" class="warn" text-anchor="end">1</text>
+
+  <!-- 黑板 -->
+  <text x="896" y="596" class="col">黑板 · SHARED</text>
+  <text x="896" y="616" font-size="11" class="mono ink-3">goal</text><text x="980" y="616" font-size="11" class="mono ink-1">"登录模块重构方案"</text>
+  <text x="896" y="634" font-size="11" class="mono ink-3">phase</text><text x="980" y="634" font-size="11" class="mono ink-1">"planning"</text>
+  <text x="896" y="652" font-size="11" class="mono ink-3">conv</text><text x="980" y="652" font-size="11" class="mono ink-1">"提交规范 / 命名约定…"</text>
+
+  <!-- 文件归属登记 -->
+  <text x="896" y="684" class="col">文件归属登记 · OWNERSHIP</text>
+  <text x="1400" y="684" font-size="10" class="ok" text-anchor="end">0 冲突</text>
+  <circle cx="900" cy="704" r="3.5" class="codex"/><text x="912" y="708" font-size="11" class="ink-2">维护员</text><text x="980" y="708" font-size="10.5" class="mono ink-3">Assets/Scripts/ (只读)</text>
+  <circle cx="900" cy="726" r="3.5" class="claude"/><text x="912" y="730" font-size="11" class="ink-2">计划书写员</text><text x="1000" y="730" font-size="10.5" class="mono ink-3">Docs/, Assets/Plans/ (写)</text>
+
+  <!-- 挂起池 / 唤醒队列 -->
+  <text x="896" y="762" class="col">挂起池 / 唤醒队列 · SCHEDULER</text>
+  <rect x="896" y="772" width="504" height="34" rx="8" class="card"/>
+  <text x="912" y="793" font-size="10.5" class="ink-3">挂起待对接</text>
+  <rect x="1000" y="780" width="64" height="18" rx="6" fill="rgba(138,146,163,0.16)"/><text x="1032" y="793" class="badge ink-3" text-anchor="middle">维护员</text>
+  <text x="1240" y="793" font-size="10.5" class="ink-3">唤醒队列</text><text x="1384" y="793" font-size="10.5" class="ink-4" text-anchor="end">empty</text>
+  <rect x="896" y="812" width="504" height="34" rx="8" class="card"/>
+  <text x="912" y="833" font-size="10.5" class="ink-3">working</text>
+  <rect x="980" y="820" width="64" height="18" rx="6" fill="rgba(96,165,250,0.16)"/><text x="1012" y="833" class="badge info" text-anchor="middle">负责人</text>
+  <rect x="1052" y="820" width="84" height="18" rx="6" fill="rgba(96,165,250,0.16)"/><text x="1094" y="833" class="badge info" text-anchor="middle">计划书写员</text>
+  <text x="896" y="868" font-size="10" class="ink-4">状态机：idle ↔ working ↔ waiting · await_next 驱动</text>
+</svg>

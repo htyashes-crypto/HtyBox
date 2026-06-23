@@ -1,0 +1,234 @@
+<svg viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif; }
+      .mono { font-family: 'Consolas', 'Menlo', monospace; }
+      .ink-1 { fill: #e6e8ee; } .ink-2 { fill: #b8bdc8; } .ink-3 { fill: #8a92a3; } .ink-4 { fill: #5c6478; }
+      .brand { fill: #8b7cff; } .claude { fill: #d97757; } .codex { fill: #10a37f; }
+      .ok { fill: #22c55e; } .warn { fill: #f59e0b; } .err { fill: #f43f5e; } .info { fill: #60a5fa; }
+      .panel { fill: #161a21; } .card { fill: #20242c; stroke: #2a2f3a; stroke-width: 1; }
+      .sep { stroke: #2a2f3a; stroke-width: 1; }
+      .h-label { font-size: 11px; font-weight: 700; fill: #8a92a3; letter-spacing: 1px; }
+      .role { font-size: 13px; font-weight: 700; fill: #e6e8ee; }
+      .meta { font-size: 11px; fill: #8a92a3; }
+      .badge { font-size: 9.5px; font-weight: 700; }
+      .btn-g { fill: transparent; stroke: #2a2f3a; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="900" fill="#0f1115"/>
+
+  <!-- 顶栏 -->
+  <rect width="1440" height="44" class="panel"/>
+  <line x1="0" y1="44" x2="1440" y2="44" class="sep"/>
+  <rect x="16" y="14" width="16" height="16" rx="4" class="brand" opacity="0.9"/>
+  <text x="40" y="27" font-size="14" font-weight="700" class="ink-1">HtyBox</text>
+  <text x="120" y="28" font-size="12.5" class="ink-3">多 Agent 协作 /</text>
+  <text x="232" y="28" font-size="12.5" font-weight="700" class="brand">运行中 · 标准开发三人组</text>
+  <text x="1408" y="30" font-size="13" class="ink-3">✕</text>
+
+  <!-- ============ 护栏 / 控制条 ============ -->
+  <rect x="0" y="44" width="1440" height="80" class="panel"/>
+  <line x1="0" y1="124" x2="1440" y2="124" class="sep"/>
+  <circle cx="28" cy="84" r="5" class="ok"/>
+  <text x="42" y="80" font-size="13" font-weight="700" class="ink-1">运行中</text>
+  <text x="42" y="98" font-size="10.5" class="ink-4">目标：登录模块重构方案</text>
+
+  <!-- 仪表:轮次 -->
+  <text x="300" y="74" class="h-label">轮次</text>
+  <text x="300" y="104" font-size="18" font-weight="700" class="ink-1">12<tspan font-size="12" class="ink-4"> / 30</tspan></text>
+  <rect x="360" y="92" width="120" height="6" rx="3" fill="#2a2f3a"/>
+  <rect x="360" y="92" width="48" height="6" rx="3" class="ok"/>
+  <!-- 仪表:活动 agent -->
+  <text x="540" y="74" class="h-label">活动 Agent</text>
+  <text x="540" y="104" font-size="18" font-weight="700" class="ink-1">2<tspan font-size="12" class="ink-4"> / 3</tspan></text>
+  <!-- 仪表:时长 -->
+  <text x="680" y="74" class="h-label">时长</text>
+  <text x="680" y="104" font-size="18" font-weight="700" class="mono ink-1">04:32</text>
+  <!-- 仪表:成本(近似) -->
+  <text x="820" y="74" class="h-label">用量（回合近似）</text>
+  <text x="820" y="104" font-size="18" font-weight="700" class="ink-1">~38<tspan font-size="12" class="ink-4"> 回合</tspan></text>
+
+  <!-- 暂停 / 急停 -->
+  <rect x="1180" y="62" width="100" height="44" rx="10" class="btn-g"/>
+  <text x="1230" y="89" font-size="13" class="ink-2" text-anchor="middle">⏸ 全部暂停</text>
+  <rect x="1296" y="62" width="120" height="44" rx="10" fill="rgba(244,63,94,0.12)" stroke="rgba(244,63,94,0.55)" stroke-width="1.5"/>
+  <rect x="1314" y="78" width="12" height="12" rx="2" class="err"/>
+  <text x="1340" y="89" font-size="14" font-weight="700" class="err">急停 STOP</text>
+
+  <!-- ============ 左:花名册 ============ -->
+  <rect x="0" y="124" width="372" height="776" class="panel"/>
+  <line x1="372" y1="124" x2="372" y2="900" class="sep"/>
+  <text x="16" y="154" class="h-label">花名册 · ROSTER</text>
+
+  <!-- 负责人 working -->
+  <rect x="12" y="168" width="348" height="158" rx="12" fill="#20242c" stroke="#8b7cff" stroke-width="1.3"/>
+  <text x="28" y="196" font-size="14">👑</text>
+  <text x="50" y="200" class="role">负责人</text>
+  <rect x="260" y="184" width="88" height="20" rx="7" fill="rgba(96,165,250,0.16)"/>
+  <circle cx="276" cy="194" r="3.5" class="info"/>
+  <text x="286" y="198" class="badge info">working</text>
+  <circle cx="30" cy="222" r="4" class="claude"/>
+  <text x="42" y="226" class="meta">ClaudeCode · opus-4-8</text>
+  <text x="28" y="254" font-size="11" class="ink-3">当前：汇总维护员回报，准备派计划</text>
+  <text x="28" y="276" font-size="11" class="ink-4">文件范围：—（编排者）</text>
+  <rect x="28" y="288" width="74" height="28" rx="7" class="btn-g"/>
+  <text x="65" y="306" font-size="11" class="ink-2" text-anchor="middle">暂停</text>
+  <rect x="112" y="288" width="74" height="28" rx="7" class="btn-g"/>
+  <text x="149" y="306" font-size="11" class="ink-2" text-anchor="middle">接管</text>
+
+  <!-- 维护员 idle/挂起 -->
+  <rect x="12" y="338" width="348" height="158" rx="12" class="card"/>
+  <text x="28" y="366" font-size="14">🔧</text>
+  <text x="50" y="370" class="role">维护员</text>
+  <rect x="252" y="354" width="96" height="20" rx="7" fill="rgba(138,146,163,0.16)"/>
+  <circle cx="268" cy="364" r="3.5" class="ink-3"/>
+  <text x="278" y="368" class="badge ink-3">idle·挂起</text>
+  <circle cx="30" cy="392" r="4" class="codex"/>
+  <text x="42" y="396" class="meta">Codex · gpt-5.5</text>
+  <text x="28" y="424" font-size="11" class="ink-3">当前：await_next 挂起待对接</text>
+  <text x="28" y="446" font-size="11" class="ink-4">文件范围：Assets/Scripts/（只读）</text>
+  <rect x="28" y="458" width="74" height="28" rx="7" class="btn-g"/>
+  <text x="65" y="476" font-size="11" class="ink-2" text-anchor="middle">暂停</text>
+  <rect x="112" y="458" width="74" height="28" rx="7" class="btn-g"/>
+  <text x="149" y="476" font-size="11" class="ink-2" text-anchor="middle">接管</text>
+
+  <!-- 计划书写员 working -->
+  <rect x="12" y="508" width="348" height="158" rx="12" class="card"/>
+  <text x="28" y="536" font-size="14">📝</text>
+  <text x="50" y="540" class="role">计划书写员</text>
+  <rect x="260" y="524" width="88" height="20" rx="7" fill="rgba(96,165,250,0.16)"/>
+  <circle cx="276" cy="534" r="3.5" class="info"/>
+  <text x="286" y="538" class="badge info">working</text>
+  <circle cx="30" cy="562" r="4" class="claude"/>
+  <text x="42" y="566" class="meta">ClaudeCode · opus-4-8</text>
+  <text x="28" y="594" font-size="11" class="ink-3">当前：整合需求、书写重构计划</text>
+  <text x="28" y="616" font-size="11" class="ink-4">文件范围：Docs/、Assets/Plans/</text>
+  <rect x="28" y="628" width="74" height="28" rx="7" class="btn-g"/>
+  <text x="65" y="646" font-size="11" class="ink-2" text-anchor="middle">暂停</text>
+  <rect x="112" y="628" width="74" height="28" rx="7" class="btn-g"/>
+  <text x="149" y="646" font-size="11" class="ink-2" text-anchor="middle">接管</text>
+
+  <text x="28" y="700" font-size="10.5" class="ink-4">点任意成员 → 跳到其终端，随时介入</text>
+
+  <!-- ============ 中:任务板 ============ -->
+  <rect x="372" y="124" width="600" height="776" fill="#0f1115"/>
+  <line x1="972" y1="124" x2="972" y2="900" class="sep"/>
+  <text x="392" y="154" class="h-label">任务板 · TASK BOARD</text>
+  <text x="392" y="178" font-size="10.5" class="ink-4">任务</text>
+  <text x="760" y="178" font-size="10.5" class="ink-4">负责</text>
+  <text x="892" y="178" font-size="10.5" class="ink-4">状态</text>
+  <line x1="392" y1="186" x2="952" y2="186" class="sep"/>
+
+  <!-- task rows -->
+  <g>
+    <text x="392" y="222" font-size="12.5" class="ink-1">探索 Assets/Scripts 代码现状</text>
+    <text x="392" y="240" font-size="10" class="mono ink-4">scope: Assets/Scripts/ (只读)</text>
+    <text x="760" y="226" font-size="11">🔧</text><text x="778" y="226" class="meta">维护员</text>
+    <rect x="884" y="212" width="58" height="20" rx="7" fill="rgba(34,197,94,0.16)"/>
+    <text x="913" y="226" class="badge ok" text-anchor="middle">已完成</text>
+    <line x1="392" y1="256" x2="952" y2="256" class="sep"/>
+  </g>
+  <g>
+    <text x="392" y="292" font-size="12.5" class="ink-1">整合需求并书写重构计划</text>
+    <text x="392" y="310" font-size="10" class="mono ink-4">scope: Docs/, Assets/Plans/</text>
+    <text x="760" y="296" font-size="11">📝</text><text x="778" y="296" class="meta">书写员</text>
+    <rect x="884" y="282" width="58" height="20" rx="7" fill="rgba(96,165,250,0.16)"/>
+    <text x="913" y="296" class="badge info" text-anchor="middle">进行中</text>
+    <line x1="392" y1="326" x2="952" y2="326" class="sep"/>
+  </g>
+  <g>
+    <text x="392" y="362" font-size="12.5" class="ink-1">汇总评审、确认计划方向</text>
+    <text x="392" y="380" font-size="10" class="mono ink-4">scope: —</text>
+    <text x="760" y="366" font-size="11">👑</text><text x="778" y="366" class="meta">负责人</text>
+    <rect x="884" y="352" width="58" height="20" rx="7" fill="rgba(96,165,250,0.16)"/>
+    <text x="913" y="366" class="badge info" text-anchor="middle">进行中</text>
+    <line x1="392" y1="396" x2="952" y2="396" class="sep"/>
+  </g>
+  <g>
+    <text x="392" y="432" font-size="12.5" class="ink-2">实现重构 Step 1（拆分登录服务）</text>
+    <text x="392" y="450" font-size="10" class="mono ink-4">scope: Assets/Scripts/Auth/</text>
+    <text x="760" y="436" font-size="11" class="ink-4">未指派</text>
+    <rect x="884" y="422" width="58" height="20" rx="7" fill="rgba(138,146,163,0.16)"/>
+    <text x="913" y="436" class="badge ink-3" text-anchor="middle">待派</text>
+    <line x1="392" y1="466" x2="952" y2="466" class="sep"/>
+  </g>
+  <g>
+    <text x="392" y="502" font-size="12.5" class="ink-2">编写登录服务单元测试</text>
+    <text x="392" y="520" font-size="10" class="mono ink-4">scope: Assets/Tests/</text>
+    <text x="760" y="506" font-size="11" class="ink-4">未指派</text>
+    <rect x="884" y="492" width="58" height="20" rx="7" fill="rgba(138,146,163,0.16)"/>
+    <text x="913" y="506" class="badge ink-3" text-anchor="middle">待派</text>
+    <line x1="392" y1="536" x2="952" y2="536" class="sep"/>
+  </g>
+
+  <!-- 冲突裁判提示 -->
+  <rect x="392" y="560" width="560" height="52" rx="10" fill="rgba(245,158,11,0.08)" stroke="rgba(245,158,11,0.28)"/>
+  <text x="410" y="583" font-size="11.5" font-weight="700" class="warn">⚖ 冲突裁判：监控中</text>
+  <text x="410" y="601" font-size="10.5" class="ink-3">范围不重叠 · 每轮已自动文件快照（Unity 目录裁剪）· 0 越界</text>
+
+  <!-- ============ 右:消息日志 ============ -->
+  <rect x="972" y="124" width="468" height="776" class="panel"/>
+  <text x="990" y="154" class="h-label">消息日志 · MESSAGE LOG</text>
+
+  <!-- log entries -->
+  <g>
+    <circle cx="998" cy="190" r="3.5" class="claude"/>
+    <text x="1012" y="194" font-size="11.5" class="ink-2"><tspan font-weight="700" class="ink-1">负责人</tspan> → 维护员</text>
+    <rect x="1300" y="182" width="76" height="16" rx="6" fill="rgba(139,124,255,0.16)"/>
+    <text x="1338" y="194" class="badge brand" text-anchor="middle">assign_task</text>
+    <text x="1424" y="194" font-size="10" class="mono ink-4" text-anchor="end">04:01</text>
+    <text x="1012" y="214" font-size="11" class="ink-3">探索 Assets/Scripts 现状（只读）</text>
+    <line x1="990" y1="232" x2="1416" y2="232" class="sep"/>
+  </g>
+  <g>
+    <circle cx="998" cy="258" r="3.5" class="codex"/>
+    <text x="1012" y="262" font-size="11.5" class="ink-2"><tspan font-weight="700" class="ink-1">维护员</tspan> → 负责人</text>
+    <rect x="1290" y="250" width="86" height="16" rx="6" fill="rgba(34,197,94,0.16)"/>
+    <text x="1333" y="262" class="badge ok" text-anchor="middle">report_result</text>
+    <text x="1424" y="262" font-size="10" class="mono ink-4" text-anchor="end">04:18</text>
+    <text x="1012" y="282" font-size="11" class="ink-3">142 脚本 / 8 程序集，核心依赖…</text>
+    <line x1="990" y1="300" x2="1416" y2="300" class="sep"/>
+  </g>
+  <g>
+    <circle cx="998" cy="326" r="3.5" class="codex"/>
+    <text x="1012" y="330" font-size="11.5" class="ink-2"><tspan font-weight="700" class="ink-1">维护员</tspan></text>
+    <rect x="1296" y="318" width="80" height="16" rx="6" fill="rgba(138,146,163,0.16)"/>
+    <text x="1336" y="330" class="badge ink-3" text-anchor="middle">await_next</text>
+    <text x="1424" y="330" font-size="10" class="mono ink-4" text-anchor="end">04:18</text>
+    <text x="1012" y="350" font-size="11" class="ink-3">挂起待对接，等待下一条指令</text>
+    <line x1="990" y1="368" x2="1416" y2="368" class="sep"/>
+  </g>
+  <g>
+    <circle cx="998" cy="394" r="3.5" class="brand"/>
+    <text x="1012" y="398" font-size="11.5" class="ink-2"><tspan font-weight="700" class="brand">HtyBox</tspan> → 负责人</text>
+    <rect x="1312" y="386" width="64" height="16" rx="6" fill="rgba(139,124,255,0.16)"/>
+    <text x="1344" y="398" class="badge brand" text-anchor="middle">唤醒</text>
+    <text x="1424" y="398" font-size="10" class="mono ink-4" text-anchor="end">04:18</text>
+    <text x="1012" y="418" font-size="11" class="ink-3">注入：维护员已回报，请汇总</text>
+    <line x1="990" y1="436" x2="1416" y2="436" class="sep"/>
+  </g>
+  <g>
+    <circle cx="998" cy="462" r="3.5" class="claude"/>
+    <text x="1012" y="466" font-size="11.5" class="ink-2"><tspan font-weight="700" class="ink-1">负责人</tspan> → 计划书写员</text>
+    <rect x="1300" y="454" width="76" height="16" rx="6" fill="rgba(139,124,255,0.16)"/>
+    <text x="1338" y="466" class="badge brand" text-anchor="middle">assign_task</text>
+    <text x="1424" y="466" font-size="10" class="mono ink-4" text-anchor="end">04:25</text>
+    <text x="1012" y="486" font-size="11" class="ink-3">整合需求写计划（Docs/, Plans/）</text>
+    <line x1="990" y1="504" x2="1416" y2="504" class="sep"/>
+  </g>
+  <g>
+    <circle cx="998" cy="530" r="3.5" class="brand"/>
+    <text x="1012" y="534" font-size="11.5" class="ink-2"><tspan font-weight="700" class="brand">HtyBox</tspan> → 计划书写员</text>
+    <rect x="1312" y="522" width="64" height="16" rx="6" fill="rgba(139,124,255,0.16)"/>
+    <text x="1344" y="534" class="badge brand" text-anchor="middle">唤醒</text>
+    <text x="1424" y="534" font-size="10" class="mono ink-4" text-anchor="end">04:25</text>
+    <text x="1012" y="554" font-size="11" class="ink-3">注入：新任务，请 read_inbox()</text>
+    <line x1="990" y1="572" x2="1416" y2="572" class="sep"/>
+  </g>
+  <g>
+    <circle cx="998" cy="598" r="3.5" class="info"/>
+    <text x="1012" y="602" font-size="11.5" class="ink-3">计划书写员 working……</text>
+    <text x="1424" y="602" font-size="10" class="mono ink-4" text-anchor="end">now</text>
+  </g>
+</svg>

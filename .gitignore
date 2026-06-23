@@ -1,0 +1,28 @@
+# ---- Node / 前端 ----
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# ---- Tauri / Rust 后端 ----
+src-tauri/target/
+**/*.rs.bk
+
+# ---- 日志 ----
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# ---- 环境变量 ----
+.env
+.env.*
+!.env.example
+
+# ---- 编辑器 / 系统 ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
