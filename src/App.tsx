@@ -183,7 +183,11 @@ export default function App() {
                       "absolute inset-0 " + (w.id === activeId ? "" : "hidden")
                     }
                   >
-                    <TerminalDock workspaceId={w.id} cwd={w.path} />
+                    <TerminalDock
+                      workspaceId={w.id}
+                      cwd={w.path}
+                      active={w.id === activeId}
+                    />
                   </div>
                 ))}
             </div>

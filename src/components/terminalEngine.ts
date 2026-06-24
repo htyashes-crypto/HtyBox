@@ -77,6 +77,31 @@ export function ensureEngine(
     invoke("write_terminal", { id: termId, data }).catch(() => {}),
   );
 
+  // 复制/粘贴（WebView 原生 paste 事件不可靠 → 显式拦截）：
+  // Ctrl+V → 读剪贴板 term.paste()（走 bracketed-paste，claude/codex 识别为整段粘贴）；
+  // Ctrl+C → 有选区则复制并清选区，无选区放行（= SIGINT 中断）。
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type !== "keydown" || !e.ctrlKey || e.altKey) return true;
+    if (e.key === "v" || e.key === "V") {
+      navigator.clipboard
+        ?.readText()
+        .then((t) => {
+          if (t) term.paste(t);
+        })
+        .catch(() => {});
+      return false;
+    }
+    if ((e.key === "c" || e.key === "C") && !e.shiftKey) {
+      const sel = term.getSelection();
+      if (sel) {
+        navigator.clipboard?.writeText(sel).catch(() => {});
+        term.clearSelection();
+        return false;
+      }
+    }
+    return true;
+  });
+
   engines.set(termId, {
     term,
     fit,
@@ -259,5 +284,30 @@ export function setEngineTitleHandler(
 export function disposeByPrefix(prefix: string): void {
   for (const id of [...engines.keys()]) {
     if (id.startsWith(prefix)) disposeEngine(id);
+  }
+}
+
+/**
+ * 强制重排 + 重画某 workspace 的全部终端。工作区从隐藏(回欢迎页/切走，display:none)恢复显示时调用。
+ * 由 React(知道哪个工作区 active)驱动，不依赖 ResizeObserver（祖先 display 切换它不一定触发）。
+ */
+export function redrawByPrefix(prefix: string): void {
+  for (const id of [...engines.keys()]) {
+    if (!id.startsWith(prefix)) continue;
+    fitAndResize(id); // open-if-needed + fit + 去重 resize
+    const e = engines.get(id);
+    if (
+      e &&
+      e.opened &&
+      e.created &&
+      e.el.clientWidth > 0 &&
+      e.el.clientHeight > 0
+    ) {
+      try {
+        e.term.refresh(0, e.term.rows - 1); // 无条件强制重画（修恢复显示后的空白）
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
