@@ -157,9 +157,22 @@ function fitAndResize(termId: string): void {
   maybeLaunch(termId);
 }
 
-/** 外部（dockview 尺寸/可见性事件）触发一次 fit + resize。 */
+/**
+ * 外部（dockview 尺寸/可见性事件）触发 fit + resize + **强制重绘**。
+ * 重绘修复：面板从隐藏(回欢迎页/切走 workspace)恢复显示后，xterm 视口不会自动重画
+ * （尤其 codex/claude 这类全屏 TUI 没收到 resize 就不重绘）→ 整片空白。refresh 从
+ * xterm 自身缓冲重画一遍即可恢复。
+ */
 export function refitEngine(termId: string): void {
   fitAndResize(termId);
+  const e = engines.get(termId);
+  if (e && e.opened && e.created) {
+    try {
+      e.term.refresh(0, e.term.rows - 1);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /** 把引擎挂进容器（首次挂载时才 open），并监听尺寸。 */
