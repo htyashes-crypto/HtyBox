@@ -34,6 +34,7 @@ interface Engine {
   lastCols?: number; // 上次发给 PTY 的尺寸；去重避免多余 SIGWINCH 把运行中的 TUI 画花
   lastRows?: number;
   hidden?: boolean; // 容器被 display:none 隐藏过 → 恢复显示时即使尺寸没变也要强制重画
+  createTimer?: number; // 防抖句柄：等容器尺寸稳定后才 open+createPty（修启动期 resize 致叠影/卡死）
 }
 
 const engines = new Map<string, Engine>();
@@ -87,20 +88,25 @@ export function ensureEngine(
         ?.readText()
         .then((raw) => {
           if (!raw) return;
-          const isAgent = agentKind === "claude" || agentKind === "codex";
-          if (isAgent) {
-            // 成对 bracketed-paste 注入，让 claude/codex 把多行折叠成 [Pasted text +N lines]：
-            // ① 换行规范成 \n —— claude/codex 按 \n 计行，xterm 原生 paste 会把 \n 转成 \r
-            //    反而让它数不出行 → 不折叠（这正是之前一直不折叠的根因）。
-            // ② agent 终端按 profile 强制包裹，不赌 ?2004h 标志(可能被 ConPTY 吞掉或切换瞬间滞后)。
+          // claude/codex：成对 bracketed-paste 强制注入(不赌可能被 ConPTY 吞掉的 ?2004h 标志)，
+          // 让其把多行折叠成 [Pasted text +N lines]。两家计行用的换行符不同(实测)：
+          //   · claude 按 \r 计行(与真实终端 bracketed-paste 惯例一致，xterm/Win Terminal 都发 \r)；
+          //   · codex 按 \n 计行(发 \r 不折叠)。
+          // 发错换行符 → 数不出行数 → 不折叠(Ctrl+V 一直全量显示的真因)。
+          if (agentKind === "claude") {
+            const text = raw.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
+            invoke("write_terminal", {
+              id: termId,
+              data: `\x1b[200~${text}\x1b[201~`,
+            }).catch(() => {});
+          } else if (agentKind === "codex") {
             const text = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
             invoke("write_terminal", {
               id: termId,
               data: `\x1b[200~${text}\x1b[201~`,
             }).catch(() => {});
           } else {
-            // 普通 shell：交给 xterm 原生 paste（自动按 bracketedPasteMode 决定是否包裹），
-            // 保持已验证可用的行为，不引入回归。
+            // 普通 shell：交给 xterm 原生 paste（按 bracketedPasteMode 决定是否包裹），不引入回归。
             term.paste(raw);
           }
         })
@@ -176,6 +182,30 @@ function maybeLaunch(termId: string): void {
   );
 }
 
+/**
+ * 尺寸稳定后：open(若未) + fit + 按最终列宽建 PTY。只由 fitAndResize 的防抖定时器调用。
+ * 等尺寸稳再 open，渲染器按真实尺寸初始化 → 修"打字不刷新/卡死第一个字符"。
+ * 用 DOM 渲染器(不挂 WebGL)：opacity 叠放下终端常驻渲染，WebGL 多上下文超浏览器上限 +
+ * 纹理图集损坏(彩色噪块)；DOM 无图集、无上限、清屏干净。
+ */
+function openFitCreate(termId: string): void {
+  const e = engines.get(termId);
+  if (!e || e.created) return;
+  e.createTimer = undefined;
+  if (e.el.clientWidth === 0 || e.el.clientHeight === 0) return; // 又被隐藏 → 等下次 fit 重新防抖
+  if (!e.opened) {
+    e.term.open(e.el);
+    e.opened = true;
+    e.term.focus();
+  }
+  try {
+    e.fit.fit();
+  } catch {
+    return;
+  }
+  createPty(termId);
+}
+
 function fitAndResize(termId: string): void {
   const e = engines.get(termId);
   if (!e) return;
@@ -184,27 +214,21 @@ function fitAndResize(termId: string): void {
     e.hidden = true;
     return;
   }
-  // 容器已就绪才首次 open + 挂 WebGL：渲染器按真实尺寸初始化，避免"打字不刷新/残留"
-  // （attach 那一刻 dockview 可能还没量好尺寸，按 0 尺寸 open 会让字符测量/渲染卡住）
-  if (!e.opened) {
-    // 容器已就绪(尺寸非 0)才 open，渲染器按真实尺寸初始化 → 修打字残留。
-    // 用 DOM 渲染器(不挂 WebGL)：opacity 叠放下所有终端常驻渲染，WebGL 多上下文易超浏览器
-    // 上限 + 纹理图集损坏(彩色噪块/内容重叠)；DOM 无图集、无上限，清屏干净。
-    e.term.open(e.el);
-    e.opened = true;
-    e.term.focus();
-    // 分屏/布局在 open 后的下一帧才完全稳定：再走一次完整 fit(+按需 resize PTY)+重绘，
-    // 修"open 那刻面板尺寸瞬时不准 → 字符测量卡住、增量写不刷新、要拖动才恢复"(卡死第一个字符根因)
-    requestAnimationFrame(() => fitAndResize(termId));
+  // 还没建 PTY：防抖等容器尺寸稳定(连续 140ms 不变)再 open+fit+createPty。
+  // 根因修复：分屏/dockview 布局在挂载后头几帧会反复改面板尺寸，若此刻就按瞬时列宽建 PTY，
+  // claude 会按错误列宽启动绘制，layout 一稳就被 resize → 整屏光标定位重绘错位 → 与上一屏
+  // (启动 splash / resume 选择器)叠在同一行(画面重叠)；也表现为"卡死第一个字符、拖动才恢复"。
+  // 等尺寸稳定再建 → claude 一出生即最终列宽、启动期零 resize。
+  if (!e.created) {
+    if (e.createTimer) clearTimeout(e.createTimer);
+    e.createTimer = window.setTimeout(() => openFitCreate(termId), 140);
+    return;
   }
+  if (!e.opened) return;
   try {
     e.fit.fit();
   } catch {
     return; // 容器尺寸暂不可用
-  }
-  if (!e.created) {
-    createPty(termId); // 首次有效 fit → 按真实列宽建 PTY（claude 一出生就是对的）
-    return;
   }
   const { cols, rows } = e.term;
   const wasHidden = e.hidden === true;
@@ -275,6 +299,7 @@ export function disposeEngine(termId: string): void {
   const e = engines.get(termId);
   if (!e) return;
   e.ro?.disconnect();
+  if (e.createTimer) clearTimeout(e.createTimer); // 取消未触发的延迟建 PTY，避免销毁/建立竞态
   if (e.created) invoke("close_terminal", { id: termId }).catch(() => {});
   e.term.dispose();
   e.el.parentElement?.removeChild(e.el);
