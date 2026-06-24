@@ -402,10 +402,14 @@ export default function TerminalDock({
           continue;
         }
         const id = mkId();
+        // 钉住角色名为 Tab 标题（👑Lead / 🔧worker），不被 claude 会话名自动覆盖
+        const label = (spec.role === "lead" ? "👑 " : "🔧 ") + spec.roleName;
+        CUSTOM_TITLES[id] = label;
+        saveCT();
         api.addPanel({
           id,
           component: "terminal",
-          title: spec.roleName,
+          title: label,
           params: {
             termId: id,
             shell: "powershell.exe",
