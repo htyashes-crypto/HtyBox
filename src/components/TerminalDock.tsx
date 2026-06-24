@@ -54,6 +54,24 @@ const saveCT = () => {
   }
 };
 
+// 每个 agent 终端记住它绑定的"会话名称"(=claude 通过 OSC 设的标题/会话摘要)，持久化；
+// 复原时按名精确恢复（claude --resume "<名>"）→ 多终端各回各自会话，不会都续到最近那个。
+const SN_KEY = "htybox.sessionNames.v1";
+const SESSION_NAMES: Record<string, string> = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(SN_KEY) || "{}");
+  } catch {
+    return {};
+  }
+})();
+const saveSN = () => {
+  try {
+    localStorage.setItem(SN_KEY, JSON.stringify(SESSION_NAMES));
+  } catch {
+    /* ignore */
+  }
+};
+
 // 本次运行中由布局复原出来的终端 id → 启动时发"复原命令"（claude --resume / codex resume）。
 const RESTORED_IDS = new Set<string>();
 
@@ -134,15 +152,30 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    // 复原出来的终端发"回到上次会话"的命令，否则发新建命令
-    const launch = launchCmdFor(agentKind, RESTORED_IDS.has(termId));
+    // 复原时按"记住的会话名"恢复（claude --resume "<名>"），否则发新建命令
+    const restored = RESTORED_IDS.has(termId);
+    const launch = launchCmdFor(
+      agentKind,
+      restored,
+      restored ? SESSION_NAMES[termId] : undefined,
+    );
     ensureEngine(termId, shell, launch, cwd);
     attachEngine(termId, c);
 
-    // 自动命名：程序设置终端标题(OSC)时同步到 Tab；已被用户重命名的跳过
+    // 程序设置终端标题(OSC)时：①同步到 Tab（被用户重命名的跳过）②记住会话名供复原
     setEngineTitleHandler(termId, (t) => {
       const title = t.trim();
-      if (title && !CUSTOM_TITLES[termId]) props.api.setTitle(title);
+      if (!title) return;
+      if (!CUSTOM_TITLES[termId]) props.api.setTitle(title);
+      // 仅 agent 终端记会话名；滤掉 shell 启动时的 exe 路径标题（如 C:\...\powershell.exe）
+      if (
+        (agentKind === "claude" || agentKind === "codex") &&
+        !/^[a-zA-Z]:[\\/]/.test(title) &&
+        SESSION_NAMES[termId] !== title
+      ) {
+        SESSION_NAMES[termId] = title;
+        saveSN();
+      }
     });
     // 复原时若该终端有自定义名，立即恢复（之后程序标题也不会覆盖它）
     if (CUSTOM_TITLES[termId]) props.api.setTitle(CUSTOM_TITLES[termId]);
@@ -273,6 +306,10 @@ export default function TerminalDock({
         if (CUSTOM_TITLES[termId]) {
           delete CUSTOM_TITLES[termId];
           saveCT();
+        }
+        if (SESSION_NAMES[termId]) {
+          delete SESSION_NAMES[termId];
+          saveSN();
         }
       });
 
