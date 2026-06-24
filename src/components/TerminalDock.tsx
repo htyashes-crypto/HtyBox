@@ -31,7 +31,6 @@ import codexIcon from "../assets/codex.svg";
 import {
   setupMcpAgent,
   registerAgentLauncher,
-  mcpBrokerUrl,
   type AgentSpec,
 } from "../mcp";
 
@@ -41,7 +40,6 @@ type TermParams = {
   agentKind?: AgentKind;
   cwd?: string;
   env?: Record<string, string>; // M7-A：agent 终端的身份环境变量(HTYBOX_MCP_TOKEN 等)
-  launchCmd?: string; // 显式启动命令(覆盖 launchCmdFor)，agent 终端用(claude / codex -c 注入)
 };
 
 const DRAG_MIME = "application/x-htybox-item";
@@ -161,11 +159,13 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    // 复原→按会话名恢复；新建→优先用显式 launchCmd(agent 终端，含 codex 的 -c 注入)，否则按 profile
+    // 复原时按"记住的会话名"恢复（claude --resume "<名>"），否则发新建命令
     const restored = RESTORED_IDS.has(termId);
-    const launch = restored
-      ? launchCmdFor(agentKind, true, SESSION_NAMES[termId])
-      : (props.params.launchCmd ?? launchCmdFor(agentKind, false));
+    const launch = launchCmdFor(
+      agentKind,
+      restored,
+      restored ? SESSION_NAMES[termId] : undefined,
+    );
     ensureEngine(termId, shell, launch, cwd, env);
     attachEngine(termId, c);
 
@@ -382,7 +382,6 @@ export default function TerminalDock({
     return registerAgentLauncher(workspaceId, async (specs: AgentSpec[]) => {
       const api = apiRef.current;
       if (!api) return;
-      const brokerUrl = await mcpBrokerUrl(); // codex 用 -c 注入；claude 走 .mcp.json
       let prevId: string | undefined;
       for (const spec of specs) {
         const token =
@@ -407,11 +406,7 @@ export default function TerminalDock({
         const label = (spec.role === "lead" ? "👑 " : "🔧 ") + spec.roleName;
         CUSTOM_TITLES[id] = label;
         saveCT();
-        // claude 读 .mcp.json(setupMcpAgent 已写)；codex 不读 .mcp.json → 用 -c 启动期注入 htybox
-        const launchCmd =
-          spec.agentKind === "codex"
-            ? `codex -c 'mcp_servers.htybox.url="${brokerUrl}"' -c 'mcp_servers.htybox.bearer_token_env_var="HTYBOX_MCP_TOKEN"'\r`
-            : "claude\r";
+        // claude 读 .mcp.json、codex 读 .codex/config.toml（setupMcpAgent 已分别写好）；普通启动即可
         api.addPanel({
           id,
           component: "terminal",
@@ -421,7 +416,6 @@ export default function TerminalDock({
             shell: "powershell.exe",
             agentKind: spec.agentKind,
             cwd,
-            launchCmd,
             env: {
               HTYBOX_MCP_TOKEN: token,
               HTYBOX_AGENT_ID: spec.agentId,

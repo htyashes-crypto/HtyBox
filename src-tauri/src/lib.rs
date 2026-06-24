@@ -100,6 +100,36 @@ fn write_mcp_json(cwd: &str, url: &str) -> Result<(), String> {
     std::fs::write(&path, pretty).map_err(|e| e.to_string())
 }
 
+/// 把 htybox 这个 MCP server **合并**进 `<cwd>/.codex/config.toml`（保留用户已有配置）。
+/// codex 不读 .mcp.json，用 `[mcp_servers.htybox]` 的 url + bearer_token_env_var；token 走
+/// `HTYBOX_MCP_TOKEN` 环境变量。仅在 codex 信任该项目时此文件才被加载。
+fn write_codex_config(cwd: &str, url: &str) -> Result<(), String> {
+    let dir = std::path::Path::new(cwd).join(".codex");
+    let path = dir.join("config.toml");
+    let mut doc: toml_edit::DocumentMut = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| s.parse::<toml_edit::DocumentMut>().ok())
+        .unwrap_or_default();
+
+    let root = doc.as_table_mut();
+    if !root.contains_key("mcp_servers") {
+        let mut servers = toml_edit::Table::new();
+        servers.set_implicit(true); // 渲染成 [mcp_servers.htybox] 而非裸 [mcp_servers]
+        root.insert("mcp_servers", toml_edit::Item::Table(servers));
+    }
+    let servers = root
+        .get_mut("mcp_servers")
+        .and_then(|i| i.as_table_mut())
+        .ok_or_else(|| "mcp_servers 不是表".to_string())?;
+    let mut htybox = toml_edit::Table::new();
+    htybox.insert("url", toml_edit::value(url));
+    htybox.insert("bearer_token_env_var", toml_edit::value("HTYBOX_MCP_TOKEN"));
+    servers.insert("htybox", toml_edit::Item::Table(htybox));
+
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(&path, doc.to_string()).map_err(|e| e.to_string())
+}
+
 /// M7-A：注册一个 agent（token→身份）并把 htybox 合并进该 cwd 的 .mcp.json。
 /// 之后前端用 `HTYBOX_MCP_TOKEN=<token>` 等环境变量起该 agent 的终端。
 #[tauri::command]
@@ -122,7 +152,8 @@ fn setup_mcp_agent(
         },
     );
     let url = format!("http://127.0.0.1:{}/mcp", state.broker.port());
-    write_mcp_json(&cwd, &url)
+    write_mcp_json(&cwd, &url)?; // claude 读
+    write_codex_config(&cwd, &url) // codex 读（信任项目时）
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
