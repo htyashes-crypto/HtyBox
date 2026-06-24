@@ -48,7 +48,11 @@ fn parse_frontmatter(content: &str) -> Option<serde_yaml::Value> {
 }
 
 fn str_field(v: &serde_yaml::Value, key: &str) -> Option<String> {
-    v.get(key)?.as_str().map(|s| s.trim().to_string())
+    v.get(key)?
+        .as_str()
+        .map(|s| s.trim().to_string())
+        // 值存在但为空/纯空白时视作"无"，让上层回退到文件名（否则 name 落空 → 空白卡片）
+        .filter(|s| !s.is_empty())
 }
 
 fn file_stem(p: &Path) -> String {
