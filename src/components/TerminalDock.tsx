@@ -33,7 +33,6 @@ type TermParams = {
   shell?: string;
   agentKind?: AgentKind;
   cwd?: string;
-  sessionId?: string; // claude：固定会话 UUID，用于精确复原（多会话不串）
 };
 
 const DRAG_MIME = "application/x-htybox-item";
@@ -63,15 +62,6 @@ const RESTORED_IDS = new Set<string>();
 const CLOSING = new Set<string>();
 export function markWorkspaceClosing(workspaceId: string): void {
   CLOSING.add(workspaceId);
-}
-
-/** 生成合法 v4 UUID（claude --session-id 要求合法 UUID）；优先用原生 API。 */
-function uuid(): string {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
-    const r = (Math.random() * 16) | 0;
-    return (ch === "x" ? r : (r & 0x3) | 0x8).toString(16);
-  });
 }
 
 /** 自定义 Tab：自动命名标题 + 双击内联重命名（重命名后不被自动命名覆盖）+ 关闭。 */
@@ -139,13 +129,13 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
 
 /** dockview 面板：挂终端引擎 + 自动命名 + 作为 skill/memory 拖拽落点。 */
 function DockTerminal(props: IDockviewPanelProps<TermParams>) {
-  const { termId, shell, agentKind = "shell", cwd, sessionId } = props.params;
+  const { termId, shell, agentKind = "shell", cwd } = props.params;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
     // 复原出来的终端发"回到上次会话"的命令，否则发新建命令
-    const launch = launchCmdFor(agentKind, RESTORED_IDS.has(termId), sessionId);
+    const launch = launchCmdFor(agentKind, RESTORED_IDS.has(termId));
     ensureEngine(termId, shell, launch, cwd);
     attachEngine(termId, c);
 
@@ -194,7 +184,7 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
       setEngineTitleHandler(termId, undefined);
       detachEngine(termId);
     };
-  }, [termId, shell, agentKind, cwd, sessionId, props.api]);
+  }, [termId, shell, agentKind, cwd, props.api]);
   // 内边距 + 终端底色：避免 xterm 内容贴边被面板边缘裁切
   return <div ref={ref} className="h-full w-full bg-[#1f1e1d] p-2" />;
 }
@@ -237,7 +227,6 @@ const paramsFor = (p: Profile, id: string, cwd: string): TermParams => ({
   shell: p.shell,
   agentKind: p.agentKind,
   cwd,
-  sessionId: p.agentKind === "claude" ? uuid() : undefined,
 });
 
 /** 终端区：一个 workspace 一个实例；终端 id/布局键按 workspace 隔离，cwd=工作区文件夹。 */

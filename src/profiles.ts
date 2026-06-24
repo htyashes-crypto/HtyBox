@@ -41,26 +41,20 @@ export const PROFILES: Profile[] = [
 export const DEFAULT_PROFILE = PROFILES[0];
 
 /**
- * 计算终端启动后自动发送的命令。
- * - claude：每终端固定一个 UUID——新建 `--session-id <uuid>`、复原 `--resume "<uuid>"`，
- *   多个 claude 终端互不串（官方 CLI reference 确认 --session-id / --resume）。
- * - codex：上游暂无"启动时指定 session id"，复原用 `resume --last`（当前目录最近一次）；
- *   同一工作区多个 codex 无法各自精确复原（codex 限制）。
+ * 计算终端启动后自动发送的命令。复原(resume)走"交互式会话选择器"：
+ * 实测 claude 交互模式【忽略】--session-id（会自生成 id，故 --resume <我们的 uuid> 必然
+ * "No conversation found"，已用 ~/.claude/projects 会话文件证实）。改用 claude/codex 自带选择器
+ * ——用户选回上次会话，多会话也能各选各的、不依赖我们猜 id/slug，正是用户说的"用 /resume 回去"。
+ * - claude：新建 `claude`，复原 `claude --resume`（弹会话选择器）
+ * - codex：新建 `codex`，复原 `codex resume`（弹会话选择器）
  * - shell：无启动命令。
  */
 export function launchCmdFor(
   agent: AgentKind,
   resume: boolean,
-  sessionId?: string,
 ): string | undefined {
-  if (agent === "claude") {
-    if (sessionId)
-      return resume
-        ? `claude --resume "${sessionId}"\r`
-        : `claude --session-id "${sessionId}"\r`;
-    return resume ? "claude -c\r" : "claude\r";
-  }
-  if (agent === "codex") return resume ? "codex resume --last\r" : "codex\r";
+  if (agent === "claude") return resume ? "claude --resume\r" : "claude\r";
+  if (agent === "codex") return resume ? "codex resume\r" : "codex\r";
   return undefined;
 }
 
