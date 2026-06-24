@@ -83,31 +83,54 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
   return <div ref={ref} className="h-full w-full bg-[#1f1e1d] p-2" />;
 }
 
-/** 工具栏图标：按 profile 给对应小图标（颜色由按钮 currentColor 决定）。 */
+/** 工具栏图标：Claude=官方陶土星芒、Codex=官方深色 >_ 徽标、PowerShell=终端 >_。 */
 function ProfileIcon({ id }: { id: string }) {
-  const common = {
-    className: "h-4 w-4",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 2,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
   if (id === "claude")
     return (
-      <svg {...common}>
-        <path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4" />
+      <svg
+        className="h-4 w-4"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+      >
+        <path d="M12 3v18M6.71 19.28 17.29 4.72M3.44 14.78 20.56 9.22M20.56 14.78 3.44 9.22M17.29 19.28 6.71 4.72" />
       </svg>
     );
   if (id === "codex")
     return (
-      <svg {...common}>
-        <polygon points="12 2 21 7 21 17 12 22 3 17 3 7" />
+      <svg className="h-4 w-4" viewBox="0 0 24 24">
+        <rect x="2" y="3" width="20" height="18" rx="5" fill="#181818" />
+        <path
+          d="M7 9l3 3-3 3"
+          fill="none"
+          stroke="#e8e6df"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <line
+          x1="12.5"
+          y1="15.2"
+          x2="17"
+          y2="15.2"
+          stroke="#e8e6df"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+        />
       </svg>
     );
   return (
-    <svg {...common}>
+    <svg
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <polyline points="4 7 9 12 4 17" />
       <line x1="11" y1="17" x2="19" y2="17" />
     </svg>
