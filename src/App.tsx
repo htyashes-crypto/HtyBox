@@ -52,13 +52,9 @@ export default function App() {
   };
 
   const closeWs = (id: string) => {
-    markWorkspaceClosing(id); // 先标记：卸载期间别把残缺布局写回
-    disposeByPrefix(id + "::"); // 结束该工作区全部终端
-    try {
-      localStorage.removeItem(`htybox.dock.layout.${id}`);
-    } catch {
-      /* ignore */
-    }
+    // 标记关闭中：卸载期间别把残缺布局写回；但【保留】布局键 → 重新打开可复原终端
+    markWorkspaceClosing(id);
+    disposeByPrefix(id + "::"); // 结束该工作区全部终端（PTY）
     const rest = openWs.filter((w) => w.id !== id);
     setOpenWs(rest);
     setOpened((s) => {

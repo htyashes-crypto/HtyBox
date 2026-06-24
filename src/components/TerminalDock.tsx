@@ -277,12 +277,13 @@ export default function TerminalDock({
 
       api.onDidRemovePanel((panel) => {
         const termId = (panel.params as TermParams | undefined)?.termId;
-        if (termId) {
-          disposeEngine(termId);
-          if (CUSTOM_TITLES[termId]) {
-            delete CUSTOM_TITLES[termId];
-            saveCT();
-          }
+        if (!termId) return;
+        // 工作区关闭中：引擎已由 disposeByPrefix 统一结束，且要保留布局/自定义名供复原 → 跳过
+        if (CLOSING.has(workspaceId)) return;
+        disposeEngine(termId);
+        if (CUSTOM_TITLES[termId]) {
+          delete CUSTOM_TITLES[termId];
+          saveCT();
         }
       });
 
