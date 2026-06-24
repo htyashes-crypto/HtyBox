@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { listMemories, type MemoryItem } from "../catalog";
 import SearchBox from "./ui/SearchBox";
+import InfoCard from "./ui/InfoCard";
+import { useSettings } from "../settings";
 import { listen } from "@tauri-apps/api/event";
 
 const typeColor: Record<string, string> = {
@@ -10,10 +12,11 @@ const typeColor: Record<string, string> = {
   reference: "#4f7cc4",
 };
 
-/** 只显示当前工作区绑定的 memory（~/.claude/projects/<slug>/memory）。 */
+/** 只显示当前工作区绑定的 memory（~/.claude/projects/<slug>/memory）。卡片只显名，详情走悬浮浮层。 */
 export default function MemoryPanel({ slug }: { slug: string }) {
   const [items, setItems] = useState<MemoryItem[]>([]);
   const [q, setQ] = useState("");
+  const { hoverPreview } = useSettings();
 
   useEffect(() => {
     let un: (() => void) | undefined;
@@ -57,9 +60,10 @@ export default function MemoryPanel({ slug }: { slug: string }) {
         {list.map((m) => {
           const c = typeColor[m.memType] ?? "#8c8a82";
           return (
-            <div
+            <InfoCard
               key={m.path}
-              draggable
+              name={m.name}
+              hoverEnabled={hoverPreview}
               onDragStart={(e) => {
                 e.dataTransfer.setData(
                   "application/x-htybox-item",
@@ -67,26 +71,30 @@ export default function MemoryPanel({ slug }: { slug: string }) {
                 );
                 e.dataTransfer.effectAllowed = "copy";
               }}
-              title={m.description}
-              className="cursor-grab rounded-lg border border-[#e5e2d9] bg-white px-3 py-2 transition-colors hover:border-[#d4a27f] hover:bg-[#fbfaf7] active:cursor-grabbing"
-            >
-              <div className="flex items-center gap-2">
-                <span className="truncate text-[12.5px] font-semibold text-[#191919]">
-                  {m.name}
-                </span>
-                {m.memType && (
-                  <span
-                    className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
-                    style={{ color: c, background: c + "22" }}
-                  >
-                    {m.memType}
-                  </span>
-                )}
-              </div>
-              <div className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-[#73726c]">
-                {m.description}
-              </div>
-            </div>
+              preview={
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-semibold text-[#191919]">
+                      {m.name}
+                    </span>
+                    {m.memType && (
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide uppercase"
+                        style={{ color: c, background: c + "22" }}
+                      >
+                        {m.memType}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 font-mono text-[10px] break-all text-[#a8a29a]">
+                    {m.path}
+                  </div>
+                  <div className="mt-1.5 text-[11px] leading-relaxed text-[#73726c]">
+                    {m.description || "（无描述）"}
+                  </div>
+                </>
+              }
+            />
           );
         })}
       </div>

@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { listProjectSkills, type Skill } from "../catalog";
 import SearchBox from "./ui/SearchBox";
+import InfoCard from "./ui/InfoCard";
+import { useSettings } from "../settings";
 import { listen } from "@tauri-apps/api/event";
 
-/** 只显示当前工作区文件夹自己的 skill（<dir>/.claude/skills）。 */
+/** 只显示当前工作区文件夹自己的 skill（<dir>/.claude/skills）。卡片只显名，详情走悬浮浮层。 */
 export default function SkillPanel({ projectDir }: { projectDir: string }) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [q, setQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const { hoverPreview } = useSettings();
 
   useEffect(() => {
     let un: (() => void) | undefined;
@@ -56,9 +59,10 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
           </div>
         )}
         {list.map((s) => (
-          <div
+          <InfoCard
             key={s.path}
-            draggable
+            name={s.name}
+            hoverEnabled={hoverPreview}
             onDragStart={(e) => {
               e.dataTransfer.setData(
                 "application/x-htybox-item",
@@ -66,16 +70,20 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
               );
               e.dataTransfer.effectAllowed = "copy";
             }}
-            title={`${s.invoke}\n${s.description}`}
-            className="cursor-grab rounded-lg border border-[#e5e2d9] bg-white px-3 py-2 transition-colors hover:border-[#d4a27f] hover:bg-[#fbfaf7] active:cursor-grabbing"
-          >
-            <div className="truncate text-[12.5px] font-semibold text-[#191919]">
-              {s.name}
-            </div>
-            <div className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-[#73726c]">
-              {s.description}
-            </div>
-          </div>
+            preview={
+              <>
+                <div className="text-[13px] font-semibold text-[#191919]">
+                  {s.name}
+                </div>
+                <div className="mt-0.5 font-mono text-[10.5px] text-[#c15f3c]">
+                  {s.invoke}
+                </div>
+                <div className="mt-1.5 text-[11px] leading-relaxed text-[#73726c]">
+                  {s.description || "（无描述）"}
+                </div>
+              </>
+            }
+          />
         ))}
       </div>
     </div>

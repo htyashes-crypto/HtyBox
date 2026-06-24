@@ -3,7 +3,25 @@ import { Allotment } from "allotment";
 import Sidebar from "./components/Sidebar";
 import TerminalDock, { markWorkspaceClosing } from "./components/TerminalDock";
 import Welcome, { type RecentFolder } from "./components/Welcome";
+import SettingsModal from "./components/SettingsModal";
 import { disposeByPrefix } from "./components/terminalEngine";
+
+function GearIcon() {
+  return (
+    <svg
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
 
 interface Workspace {
   id: string; // = slug(path)，同时作为 memory 作用域 slug
@@ -31,6 +49,7 @@ export default function App() {
   const [recents, setRecents] = useState<RecentFolder[]>(loadRecents);
   const [openWs, setOpenWs] = useState<Workspace[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   // 已挂载过的 workspace（懒挂载 + 挂载后常驻 → 切走/回欢迎页时 PTY 后台存活）
   const [opened, setOpened] = useState<Set<string>>(new Set());
 
@@ -116,8 +135,17 @@ export default function App() {
               +
             </span>
           </div>
-          <div className="ml-auto cursor-pointer rounded-md border border-[#e8c8bb] bg-[#d97757]/12 px-3 py-1 text-xs font-semibold text-[#c15f3c] transition-colors hover:bg-[#d97757]/20">
-            多 Agent 协作
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setShowSettings(true)}
+              title="设置"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[#73726c] transition-colors hover:bg-white hover:text-[#191919]"
+            >
+              <GearIcon />
+            </button>
+            <div className="cursor-pointer rounded-md border border-[#e8c8bb] bg-[#d97757]/12 px-3 py-1 text-xs font-semibold text-[#c15f3c] transition-colors hover:bg-[#d97757]/20">
+              多 Agent 协作
+            </div>
           </div>
         </div>
       )}
@@ -165,9 +193,16 @@ export default function App() {
       {/* 欢迎页：覆盖层（Cursor 式初始界面）。盖在终端区之上，终端在底下保活。 */}
       {!active && (
         <div className="absolute inset-0 z-50">
-          <Welcome recents={recents} onOpen={openFolder} />
+          <Welcome
+            recents={recents}
+            onOpen={openFolder}
+            onOpenSettings={() => setShowSettings(true)}
+          />
         </div>
       )}
+
+      {/* 全局设置弹窗（盖在最上层） */}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
