@@ -11,6 +11,10 @@ import "@xterm/xterm/css/xterm.css";
  * dispose 就会误杀 PTY。因此这里把 xterm 挂在一个游离的 host 元素上，
  * attach=把 host 塞进容器、detach=移出容器但保留实例，只有面板真正关闭时
  * 才 dispose（结束 PTY）。
+ *
+ * 关键：后端 PTY 的创建**延迟到容器首次 fit 出真实列宽**（createPty）——这样
+ * claude/codex 的 TUI 一出生就是正确尺寸，不会先按默认 80 列画、再被 resize
+ * 重排成花屏（尤其 agent 终端要连多个 MCP server、启动期长且忙）。
  */
 interface Engine {
   term: Terminal;
@@ -19,8 +23,13 @@ interface Engine {
   opened: boolean;
   ro?: ResizeObserver;
   onTitle?: (title: string) => void; // 程序设置终端标题时回调（Tab 自动命名）
-  pendingLaunch?: string; // 待发的启动命令（如 "claude\r"），等"shell就绪+尺寸已fit"才发
-  launchArmed: boolean; // shell 提示符已就绪（create 后 ~600ms）
+  // 建 PTY 用参数（延迟到首次 fit 才用真实列宽创建）
+  shell?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  pendingLaunch?: string; // 待发的启动命令（如 "claude\r"），等 created+shell就绪 才发
+  created: boolean; // 后端 PTY 是否已创建
+  launchArmed: boolean; // shell 提示符已就绪（createPty 后 ~600ms）
   launched: boolean; // 启动命令已发出
   lastCols?: number; // 上次发给 PTY 的尺寸；去重避免多余 SIGWINCH 把运行中的 TUI 画花
   lastRows?: number;
@@ -28,7 +37,7 @@ interface Engine {
 
 const engines = new Map<string, Engine>();
 
-/** 确保某 termId 的引擎存在（含后端 PTY）；已存在则忽略。 */
+/** 确保某 termId 的引擎存在；已存在则忽略。此时只建 xterm，PTY 延迟到首次 fit。 */
 export function ensureEngine(
   termId: string,
   shell?: string,
@@ -61,32 +70,7 @@ export function ensureEngine(
   term.onTitleChange((title) => {
     engines.get(termId)?.onTitle?.(title);
   });
-
-  // 后端 → 前端：PTY 输出（先 write 进缓冲，open 后渲染）
-  const onOutput = new Channel<number[]>();
-  onOutput.onmessage = (bytes) => term.write(new Uint8Array(bytes));
-
-  invoke("create_terminal", {
-    id: termId,
-    opts: { shell, cwd, cols: 80, rows: 24, env },
-    onOutput,
-  })
-    .then(() => {
-      // shell 起到提示符（~600ms）后"武装"启动命令；真正发送要等尺寸已 fit（见 maybeLaunch），
-      // 避免 claude/codex 在默认 80 列下先画、再被 resize 重排成花屏。
-      setTimeout(() => {
-        const e = engines.get(termId);
-        if (e) {
-          e.launchArmed = true;
-          maybeLaunch(termId);
-        }
-      }, 600);
-    })
-    .catch((err) =>
-      term.write(`\r\n\x1b[31m[create_terminal 失败] ${err}\x1b[0m\r\n`),
-    );
-
-  // 前端 → 后端：用户输入
+  // 前端 → 后端：用户输入（PTY 未建时 write 会被后端忽略）
   term.onData((data) =>
     invoke("write_terminal", { id: termId, data }).catch(() => {}),
   );
@@ -96,20 +80,53 @@ export function ensureEngine(
     fit,
     el,
     opened: false,
+    shell,
+    cwd,
+    env,
     pendingLaunch: launchCmd,
+    created: false,
     launchArmed: false,
     launched: false,
   });
 }
 
-/**
- * 在"shell 就绪 + 容器已 fit 到真实尺寸"后才发启动命令——保证 claude/codex 的 TUI
- * 在正确列宽下首次绘制（lastCols 已被一次成功 fit 写入即代表尺寸就绪）。
- */
+/** 按"当前已 fit 的真实列宽"创建后端 PTY（每个引擎只创建一次）。 */
+function createPty(termId: string): void {
+  const e = engines.get(termId);
+  if (!e || e.created) return;
+  e.created = true;
+  const cols = e.term.cols || 80;
+  const rows = e.term.rows || 24;
+  e.lastCols = cols;
+  e.lastRows = rows;
+
+  const onOutput = new Channel<number[]>();
+  onOutput.onmessage = (bytes) => e.term.write(new Uint8Array(bytes));
+
+  invoke("create_terminal", {
+    id: termId,
+    opts: { shell: e.shell, cwd: e.cwd, cols, rows, env: e.env },
+    onOutput,
+  })
+    .then(() => {
+      // shell 起到提示符（~600ms）后武装启动命令；尺寸已就绪 → maybeLaunch 即发
+      setTimeout(() => {
+        const e2 = engines.get(termId);
+        if (e2) {
+          e2.launchArmed = true;
+          maybeLaunch(termId);
+        }
+      }, 600);
+    })
+    .catch((err) =>
+      e.term.write(`\r\n\x1b[31m[create_terminal 失败] ${err}\x1b[0m\r\n`),
+    );
+}
+
+/** shell 就绪 + PTY 已按真实列宽建好后，发启动命令（claude/codex 在正确尺寸下首次绘制）。 */
 function maybeLaunch(termId: string): void {
   const e = engines.get(termId);
-  if (!e || e.launched || !e.launchArmed || !e.pendingLaunch) return;
-  if (!e.opened || e.lastCols === undefined) return; // 等第一次成功 fit 拿到真实列宽
+  if (!e || e.launched || !e.launchArmed || !e.pendingLaunch || !e.created) return;
   e.launched = true;
   invoke("write_terminal", { id: termId, data: e.pendingLaunch }).catch(
     () => {},
@@ -119,21 +136,30 @@ function maybeLaunch(termId: string): void {
 function fitAndResize(termId: string): void {
   const e = engines.get(termId);
   if (!e || !e.opened) return;
-  // 容器隐藏(display:none，如非活动 workspace)时尺寸为 0，跳过避免 fit 到 0
+  // 容器隐藏(display:none，如非活动 workspace/tab)时尺寸为 0，跳过避免 fit 到 0
   if (e.el.clientWidth === 0 || e.el.clientHeight === 0) return;
   try {
     e.fit.fit();
-    const { cols, rows } = e.term;
-    // 去重：尺寸没变就不再 resize PTY，避免多余 SIGWINCH 把运行中的 TUI 画花
-    if (cols !== e.lastCols || rows !== e.lastRows) {
-      e.lastCols = cols;
-      e.lastRows = rows;
-      invoke("resize_terminal", { id: termId, cols, rows }).catch(() => {});
-    }
   } catch {
-    /* 容器尺寸暂不可用，忽略 */
+    return; // 容器尺寸暂不可用
   }
-  maybeLaunch(termId); // 尺寸已就绪时若 shell 也 ready，则发启动命令
+  if (!e.created) {
+    createPty(termId); // 首次有效 fit → 按真实列宽建 PTY（claude 一出生就是对的）
+    return;
+  }
+  const { cols, rows } = e.term;
+  // 去重：尺寸没变就不再 resize PTY，避免多余 SIGWINCH 把运行中的 TUI 画花
+  if (cols !== e.lastCols || rows !== e.lastRows) {
+    e.lastCols = cols;
+    e.lastRows = rows;
+    invoke("resize_terminal", { id: termId, cols, rows }).catch(() => {});
+  }
+  maybeLaunch(termId);
+}
+
+/** 外部（dockview 尺寸/可见性事件）触发一次 fit + resize。 */
+export function refitEngine(termId: string): void {
+  fitAndResize(termId);
 }
 
 /** 把引擎挂进容器（首次挂载时才 open），并监听尺寸。 */
@@ -166,7 +192,7 @@ export function disposeEngine(termId: string): void {
   const e = engines.get(termId);
   if (!e) return;
   e.ro?.disconnect();
-  invoke("close_terminal", { id: termId }).catch(() => {});
+  if (e.created) invoke("close_terminal", { id: termId }).catch(() => {});
   e.term.dispose();
   e.el.parentElement?.removeChild(e.el);
   engines.delete(termId);

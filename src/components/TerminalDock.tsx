@@ -15,6 +15,7 @@ import {
   disposeEngine,
   focusEngine,
   setEngineTitleHandler,
+  refitEngine,
 } from "./terminalEngine";
 import {
   PROFILES,
@@ -168,6 +169,11 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
     ensureEngine(termId, shell, launch, cwd, env);
     attachEngine(termId, c);
 
+    // dockview 自身的尺寸/可见性事件 → 可靠 refit（比 DOM ResizeObserver 更准；
+    // 面板被显示/分屏改变时按真实列宽 fit，避免 TUI 花屏）
+    const dimSub = props.api.onDidDimensionsChange(() => refitEngine(termId));
+    const visSub = props.api.onDidVisibilityChange(() => refitEngine(termId));
+
     // 程序设置终端标题(OSC)时：①同步到 Tab（被用户重命名的跳过）②记住会话名供复原
     setEngineTitleHandler(termId, (t) => {
       const title = t.trim();
@@ -220,6 +226,8 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
       c.removeEventListener("dragover", onDragOver);
       c.removeEventListener("dragleave", onDragLeave);
       c.removeEventListener("drop", onDrop);
+      dimSub.dispose();
+      visSub.dispose();
       setEngineTitleHandler(termId, undefined);
       detachEngine(termId);
     };
@@ -368,12 +376,14 @@ export default function TerminalDock({
     [],
   );
 
-  // M7-A：响应 App「多 Agent 协作」，在本工作区起 agent 终端（注册身份 + 注入 token env）
+  // M7-A：响应 App「多 Agent 协作」，在本工作区起 agent 终端（注册身份 + 注入 token env）。
+  // 顺序创建并左右分屏（都可见 → 都按真实列宽起、都连上 broker）。
   useEffect(() => {
-    return registerAgentLauncher(workspaceId, (specs: AgentSpec[]) => {
-      specs.forEach(async (spec) => {
-        const api = apiRef.current;
-        if (!api) return;
+    return registerAgentLauncher(workspaceId, async (specs: AgentSpec[]) => {
+      const api = apiRef.current;
+      if (!api) return;
+      let prevId: string | undefined;
+      for (const spec of specs) {
         const token =
           typeof crypto !== "undefined" && crypto.randomUUID
             ? crypto.randomUUID()
@@ -389,7 +399,7 @@ export default function TerminalDock({
           });
         } catch (e) {
           console.error("setup_mcp_agent failed", e);
-          return;
+          continue;
         }
         const id = mkId();
         api.addPanel({
@@ -409,8 +419,12 @@ export default function TerminalDock({
               HTYBOX_WORKSPACE_ID: workspaceId,
             },
           },
+          position: prevId
+            ? { referencePanel: prevId, direction: "right" }
+            : undefined,
         });
-      });
+        prevId = id;
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, cwd]);
