@@ -1,14 +1,17 @@
+mod broker;
 mod catalog;
 mod pty;
 mod watcher;
+
+use std::sync::Arc;
 
 use pty::{PtyManager, SpawnOptions};
 use tauri::ipc::Channel;
 use tauri::State;
 
-#[derive(Default)]
 struct AppState {
     pty: PtyManager,
+    broker: Arc<broker::Broker>,
 }
 
 #[tauri::command]
@@ -61,12 +64,22 @@ fn list_projects() -> Vec<catalog::ProjectRef> {
     catalog::list_projects()
 }
 
+/// M7-A：返回本地 MCP broker 的端点 URL（agent 的 .mcp.json 指向它）。
+#[tauri::command]
+fn mcp_broker_url(state: State<'_, AppState>) -> String {
+    format!("http://127.0.0.1:{}/mcp", state.broker.port())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let broker = broker::start();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState::default())
+        .manage(AppState {
+            pty: PtyManager::default(),
+            broker,
+        })
         .setup(|app| {
             watcher::start(app.handle().clone());
             Ok(())
@@ -79,7 +92,8 @@ pub fn run() {
             list_skills,
             list_project_skills,
             list_memories,
-            list_projects
+            list_projects,
+            mcp_broker_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
