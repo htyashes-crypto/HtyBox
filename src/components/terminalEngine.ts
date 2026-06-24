@@ -34,6 +34,7 @@ interface Engine {
   launched: boolean; // 启动命令已发出
   lastCols?: number; // 上次发给 PTY 的尺寸；去重避免多余 SIGWINCH 把运行中的 TUI 画花
   lastRows?: number;
+  hidden?: boolean; // 容器被 display:none 隐藏过 → 恢复显示时即使尺寸没变也要强制重画
 }
 
 const engines = new Map<string, Engine>();
@@ -136,9 +137,26 @@ function maybeLaunch(termId: string): void {
 
 function fitAndResize(termId: string): void {
   const e = engines.get(termId);
-  if (!e || !e.opened) return;
-  // 容器隐藏(display:none，如非活动 workspace/tab)时尺寸为 0，跳过避免 fit 到 0
-  if (e.el.clientWidth === 0 || e.el.clientHeight === 0) return;
+  if (!e) return;
+  // 容器隐藏(display:none，如非活动 workspace/tab)或未布局时尺寸为 0：记下隐藏过、跳过
+  if (e.el.clientWidth === 0 || e.el.clientHeight === 0) {
+    e.hidden = true;
+    return;
+  }
+  // 容器已就绪才首次 open + 挂 WebGL：渲染器按真实尺寸初始化，避免"打字不刷新/残留"
+  // （attach 那一刻 dockview 可能还没量好尺寸，按 0 尺寸 open 会让字符测量/渲染卡住）
+  if (!e.opened) {
+    e.term.open(e.el);
+    e.opened = true;
+    try {
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => webgl.dispose());
+      e.term.loadAddon(webgl);
+    } catch {
+      /* WebGL 不可用 → 退回 DOM 渲染 */
+    }
+    e.term.focus();
+  }
   try {
     e.fit.fit();
   } catch {
@@ -149,11 +167,25 @@ function fitAndResize(termId: string): void {
     return;
   }
   const { cols, rows } = e.term;
-  // 去重：尺寸没变就不再 resize PTY，避免多余 SIGWINCH 把运行中的 TUI 画花
+  const wasHidden = e.hidden === true;
+  e.hidden = false;
   if (cols !== e.lastCols || rows !== e.lastRows) {
+    // 尺寸变了：去重后 resize PTY + 重画
     e.lastCols = cols;
     e.lastRows = rows;
     invoke("resize_terminal", { id: termId, cols, rows }).catch(() => {});
+    try {
+      e.term.refresh(0, e.term.rows - 1);
+    } catch {
+      /* ignore */
+    }
+  } else if (wasHidden) {
+    // 尺寸没变但刚从隐藏(display:none)恢复 → WebGL/DOM 都需强制重画一遍，否则空白/残留
+    try {
+      e.term.refresh(0, e.term.rows - 1);
+    } catch {
+      /* ignore */
+    }
   }
   maybeLaunch(termId);
 }
@@ -181,23 +213,12 @@ export function attachEngine(termId: string, container: HTMLElement): void {
   const e = engines.get(termId);
   if (!e) return;
   container.appendChild(e.el);
-  if (!e.opened) {
-    e.term.open(e.el);
-    e.opened = true;
-    // WebGL 渲染器：DOM 渲染器有"输出不自动重绘、要 resize 才刷新"的毛病；失败则退回 DOM
-    try {
-      const webgl = new WebglAddon();
-      webgl.onContextLoss(() => webgl.dispose());
-      e.term.loadAddon(webgl);
-    } catch {
-      /* WebGL 不可用 → 退回 DOM 渲染 */
-    }
-  }
+  // open() + 挂 WebGL 推迟到 fitAndResize（容器已就绪、尺寸非 0 时），避免按 0 尺寸初始化渲染器
   requestAnimationFrame(() => fitAndResize(termId));
   const ro = new ResizeObserver(() => fitAndResize(termId));
   ro.observe(container);
   e.ro = ro;
-  e.term.focus();
+  if (e.opened) e.term.focus();
 }
 
 /** 从容器移出（保留 xterm + PTY，供重新挂载）。 */
