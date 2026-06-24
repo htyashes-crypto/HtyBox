@@ -149,7 +149,7 @@ export default function App() {
                 if (!active) return;
                 launchAgents(active.id, [
                   { agentId: "负责人", roleName: "负责人", role: "lead", agentKind: "claude" },
-                  { agentId: "维护员", roleName: "维护员", role: "worker", agentKind: "claude" },
+                  { agentId: "维护员", roleName: "维护员", role: "worker", agentKind: "codex" },
                 ]);
               }}
               title="M7-A 测试：在本工作区起 负责人+维护员 两个 claude agent（接入 MCP broker）"
