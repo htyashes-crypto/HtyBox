@@ -58,6 +58,13 @@ const saveCT = () => {
 // 本次运行中由布局复原出来的终端 id → 启动时发"复原命令"（claude --resume / codex resume）。
 const RESTORED_IDS = new Set<string>();
 
+// 正在关闭的 workspace：其 dock 卸载期间 dockview 仍会逐个移除面板并触发 layout 变更，
+// 此时绝不能把"拆到一半的残缺布局"写回 localStorage（否则复原会拿到坏掉的单面板布局）。
+const CLOSING = new Set<string>();
+export function markWorkspaceClosing(workspaceId: string): void {
+  CLOSING.add(workspaceId);
+}
+
 /** 生成合法 v4 UUID（claude --session-id 要求合法 UUID）；优先用原生 API。 */
 function uuid(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -266,6 +273,7 @@ export default function TerminalDock({
     (event: DockviewReadyEvent) => {
       const api = event.api;
       apiRef.current = api;
+      CLOSING.delete(workspaceId); // 重新打开 → 不再处于关闭态
 
       api.onDidRemovePanel((panel) => {
         const termId = (panel.params as TermParams | undefined)?.termId;
@@ -279,6 +287,7 @@ export default function TerminalDock({
       });
 
       api.onDidLayoutChange(() => {
+        if (CLOSING.has(workspaceId)) return; // 关闭中：别把残缺布局写回
         try {
           localStorage.setItem(layoutKey, JSON.stringify(api.toJSON()));
         } catch {
