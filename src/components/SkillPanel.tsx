@@ -42,15 +42,7 @@ export default function SkillPanel() {
 
   return (
     <div className="flex h-full flex-col bg-[#f4f3ee]">
-      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-        <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#73726c]">
-          Skill
-        </span>
-        <span className="rounded-full bg-[#ecebe2] px-1.5 py-0.5 text-[10px] font-semibold text-[#73726c]">
-          {skills.length}
-        </span>
-      </div>
-      <div className="px-2.5 pb-2">
+      <div className="px-2.5 pt-1 pb-2">
         <SearchBox value={q} onChange={setQ} placeholder="搜索 skill…" />
       </div>
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2.5 pb-3">

@@ -60,19 +60,11 @@ export default function MemoryPanel() {
 
   return (
     <div className="flex h-full flex-col bg-[#f4f3ee]">
-      <div className="px-3 pt-3 pb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#73726c]">
-            Memory
-          </span>
-          <span className="rounded-full bg-[#ecebe2] px-1.5 py-0.5 text-[10px] font-semibold text-[#73726c]">
-            {items.length}
-          </span>
-        </div>
+      <div className="px-2.5 pt-1 pb-2">
         <select
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
-          className="mt-2 w-full rounded-lg border border-[#e5e2d9] bg-white px-2 py-1.5 font-mono text-[11px] text-[#3d3d3a] outline-none focus:border-[#d97757]"
+          className="w-full rounded-lg border border-[#e5e2d9] bg-white px-2 py-1.5 font-mono text-[11px] text-[#3d3d3a] outline-none focus:border-[#d97757]"
         >
           {projects.length === 0 && <option value="">（无 memory 项目）</option>}
           {projects.map((p) => (

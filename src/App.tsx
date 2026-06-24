@@ -1,7 +1,6 @@
 import { Allotment } from "allotment";
+import Sidebar from "./components/Sidebar";
 import TerminalDock from "./components/TerminalDock";
-import SkillPanel from "./components/SkillPanel";
-import MemoryPanel from "./components/MemoryPanel";
 
 function WorkspaceTab({ name, active }: { name: string; active?: boolean }) {
   return (
@@ -37,24 +36,21 @@ export default function App() {
         </div>
       </div>
 
-      {/* 三栏：Skill | 终端 | Memory（可拖拽调宽） */}
+      {/* 两栏：左侧栏(Skill/Memory 切换) | 终端区 */}
       <div className="min-h-0 flex-1">
         <Allotment proportionalLayout={false}>
-          <Allotment.Pane minSize={180} preferredSize={260} snap>
-            <SkillPanel />
+          <Allotment.Pane minSize={220} preferredSize={300} snap>
+            <Sidebar />
           </Allotment.Pane>
-          <Allotment.Pane minSize={360}>
+          <Allotment.Pane minSize={400}>
             <TerminalDock />
-          </Allotment.Pane>
-          <Allotment.Pane minSize={180} preferredSize={260} snap>
-            <MemoryPanel />
           </Allotment.Pane>
         </Allotment>
       </div>
 
       {/* 底部状态栏 */}
       <div className="flex h-6 shrink-0 items-center border-t border-[#e5e2d9] bg-[#f4f3ee] px-3 text-[10px] text-[#8c8a82]">
-        三栏 · 多终端 · Skill/Memory 目录 · HtyBox v0.1
+        左侧栏切换 Skill / Memory · 拖到终端注入 · HtyBox v0.1
       </div>
     </div>
   );

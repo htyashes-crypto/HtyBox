@@ -83,6 +83,8 @@ export function ensureEngine(
 function fitAndResize(termId: string): void {
   const e = engines.get(termId);
   if (!e || !e.opened) return;
+  // 容器隐藏(display:none，如非活动 workspace)时尺寸为 0，跳过避免 fit 到 0
+  if (e.el.clientWidth === 0 || e.el.clientHeight === 0) return;
   try {
     e.fit.fit();
     invoke("resize_terminal", {
@@ -134,4 +136,11 @@ export function disposeEngine(termId: string): void {
 /** 让某终端获得键盘焦点（拖拽注入后调用）。 */
 export function focusEngine(termId: string): void {
   engines.get(termId)?.term.focus();
+}
+
+/** 结束某前缀（= 某 workspace）的所有终端，关闭工作区时用。 */
+export function disposeByPrefix(prefix: string): void {
+  for (const id of [...engines.keys()]) {
+    if (id.startsWith(prefix)) disposeEngine(id);
+  }
 }
