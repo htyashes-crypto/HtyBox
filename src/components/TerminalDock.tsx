@@ -16,7 +16,6 @@ import {
   focusEngine,
   setEngineTitleHandler,
   refitEngine,
-  redrawByPrefix,
 } from "./terminalEngine";
 import {
   PROFILES,
@@ -314,11 +313,9 @@ const paramsFor = (p: Profile, id: string, cwd: string): TermParams => ({
 export default function TerminalDock({
   workspaceId,
   cwd,
-  active,
 }: {
   workspaceId: string;
   cwd: string;
-  active: boolean;
 }) {
   const apiRef = useRef<DockviewApi | null>(null);
   const layoutKey = `htybox.dock.layout.${workspaceId}`;
@@ -473,17 +470,6 @@ export default function TerminalDock({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, cwd]);
-
-  // 工作区从隐藏恢复显示(active: false→true)→ 等布局稳定后强制重排+重画所有终端，修空白
-  useEffect(() => {
-    if (!active) return;
-    const r = requestAnimationFrame(() => redrawByPrefix(`${workspaceId}::`));
-    const t = window.setTimeout(() => redrawByPrefix(`${workspaceId}::`), 80);
-    return () => {
-      cancelAnimationFrame(r);
-      clearTimeout(t);
-    };
-  }, [active, workspaceId]);
 
   return (
     <div className="flex h-full w-full flex-col bg-[#1f1e1d]">

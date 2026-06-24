@@ -180,19 +180,15 @@ export default function App() {
                   <div
                     key={w.id}
                     className={
-                      // 不用 display:none(会让 xterm/WebGL 停渲染→恢复显示时空白)；
-                      // 非活动用 opacity-0+低层级保持渲染，活动的盖在最上层
+                      // 不用 display:none：非活动用 opacity-0+低层级。opacity-0 仍与视口相交，
+                      // xterm 内置 IntersectionObserver 不会暂停它 → 终端常驻渲染、切回不空白。
                       "absolute inset-0 " +
                       (w.id === activeId
                         ? "z-10"
                         : "z-0 opacity-0 pointer-events-none")
                     }
                   >
-                    <TerminalDock
-                      workspaceId={w.id}
-                      cwd={w.path}
-                      active={w.id === activeId}
-                    />
+                    <TerminalDock workspaceId={w.id} cwd={w.path} />
                   </div>
                 ))}
             </div>

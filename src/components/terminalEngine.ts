@@ -4,17 +4,16 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 
 /**
- * 终端引擎注册表（M2）。
+ * 终端引擎注册表 —— xterm.js 官方最小集成模式（一次性清掉历史补丁，全部交给成熟机制）。
  *
- * 把 xterm 实例 + 后端 PTY 的生命周期与 React/dockview 的挂载解耦：
- * dockview 在分屏/拖动重排时会卸载并重新挂载面板的 React 组件，若终端随之
- * dispose 就会误杀 PTY。因此这里把 xterm 挂在一个游离的 host 元素上，
- * attach=把 host 塞进容器、detach=移出容器但保留实例，只有面板真正关闭时
- * 才 dispose（结束 PTY）。
- *
- * 关键：后端 PTY 的创建**延迟到容器首次 fit 出真实列宽**（createPty）——这样
- * claude/codex 的 TUI 一出生就是正确尺寸，不会先按默认 80 列画、再被 resize
- * 重排成花屏（尤其 agent 终端要连多个 MCP server、启动期长且忙）。
+ * 1. DOM 渲染器（xterm 默认）：无 WebGL → 无纹理图集损坏、无浏览器 WebGL context 上限。
+ * 2. 零 term.refresh() 强制重绘：重绘交给 xterm 自身渲染循环 + 内置 IntersectionObserver
+ *    （容器不可见时自动暂停、恢复显示自动全量重绘 —— VS Code 同款，杜绝自写"切屏空白/残留"）。
+ * 3. 尺寸：单一 ResizeObserver + 防抖 fit；尺寸稳定后才按真实列宽建 PTY，之后仅在尺寸真的变了
+ *    才 resize；绝不在切区/激活时乱 resize（claude 整屏重绘错位叠影的根因就是启动期被乱 resize）。
+ * 4. 粘贴：只走标准 paste 事件一条路径（capture 阶段拦截，避免 xterm 再粘一遍 → 双重粘贴）。
+ * 5. 引擎与 React/dockview 挂载解耦：dockview 重排会卸载重挂面板，xterm 挂在游离 host 元素上，
+ *    attach=塞进容器、detach=移出保留、dispose=面板真正关闭时才结束 PTY。
  */
 interface Engine {
   term: Terminal;
@@ -22,31 +21,46 @@ interface Engine {
   el: HTMLDivElement; // 游离 host 元素，承载 xterm
   opened: boolean;
   ro?: ResizeObserver;
-  onTitle?: (title: string) => void; // 程序设置终端标题时回调（Tab 自动命名）
-  // 建 PTY 用参数（延迟到首次 fit 才用真实列宽创建）
+  onTitle?: (title: string) => void; // 程序设置终端标题(OSC)时回调（Tab 自动命名）
   shell?: string;
   cwd?: string;
   env?: Record<string, string>;
-  pendingLaunch?: string; // 待发的启动命令（如 "claude\r"），等 created+shell就绪 才发
+  pendingLaunch?: string; // 待发的启动命令（如 "claude\r"），等 created+提示符就绪才发
   created: boolean; // 后端 PTY 是否已创建
   launchArmed: boolean; // shell 提示符已就绪（createPty 后 ~600ms）
   launched: boolean; // 启动命令已发出
   lastCols?: number; // 上次发给 PTY 的尺寸；去重避免多余 SIGWINCH 把运行中的 TUI 画花
   lastRows?: number;
-  hidden?: boolean; // 容器被 display:none 隐藏过 → 恢复显示时即使尺寸没变也要强制重画
-  createTimer?: number; // 防抖句柄：等容器尺寸稳定后才 open+createPty（修启动期 resize 致叠影/卡死）
+  fitTimer?: number; // 防抖句柄：合并连续尺寸变化（挂载布局抖动 / 拖动分屏），稳定后只 fit 一次
 }
 
 const engines = new Map<string, Engine>();
 
-/** 确保某 termId 的引擎存在；已存在则忽略。此时只建 xterm，PTY 延迟到首次 fit。 */
+/**
+ * 把粘贴文本规范化换行 + 成对 bracketed-paste 包裹，让 claude/codex 折叠成 [Pasted text +N lines]。
+ * 两家计行用的换行符不同(实测)：claude 按 \r、codex 按 \n；发错就数不出行数 → 不折叠。
+ */
+function pasteData(agentKind: string | undefined, raw: string): string {
+  if (agentKind === "claude") {
+    const t = raw.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
+    return `\x1b[200~${t}\x1b[201~`;
+  }
+  if (agentKind === "codex") {
+    const t = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    return `\x1b[200~${t}\x1b[201~`;
+  }
+  // 普通 shell：换行规范成 \r 当作逐行回车输入（不包裹 bracketed）
+  return raw.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
+}
+
+/** 确保某 termId 的引擎存在；已存在则忽略。此时只建 xterm，PTY 延迟到尺寸稳定后才建。 */
 export function ensureEngine(
   termId: string,
   shell?: string,
   launchCmd?: string,
   cwd?: string,
   env?: Record<string, string>,
-  agentKind?: string, // "claude"|"codex"|"shell"：粘贴时据此对 agent 终端强制 bracketed 折叠
+  agentKind?: string, // "claude"|"codex"|"shell"：决定粘贴的换行/包裹方式
 ): void {
   if (engines.has(termId)) return;
 
@@ -69,50 +83,16 @@ export function ensureEngine(
   const fit = new FitAddon();
   term.loadAddon(fit);
 
-  // 程序通过 OSC 设置终端标题时回调（用于 Tab 自动命名）
-  term.onTitleChange((title) => {
-    engines.get(termId)?.onTitle?.(title);
-  });
-  // 前端 → 后端：用户输入（PTY 未建时 write 会被后端忽略）
+  // 程序通过 OSC 设标题时回调（Tab 自动命名）
+  term.onTitleChange((title) => engines.get(termId)?.onTitle?.(title));
+  // 前端 → 后端：用户输入（PTY 未建时后端忽略）
   term.onData((data) =>
     invoke("write_terminal", { id: termId, data }).catch(() => {}),
   );
 
-  // 复制/粘贴（WebView 原生 paste 事件不可靠 → 显式拦截）：
-  // Ctrl+V → 读剪贴板 term.paste()（走 bracketed-paste，claude/codex 识别为整段粘贴）；
-  // Ctrl+C → 有选区则复制并清选区，无选区放行（= SIGINT 中断）。
+  // 复制：Ctrl+C 有选区则复制并清选区，无选区放行(=SIGINT)。粘贴不在 keydown 处理（见下方 paste 事件）。
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== "keydown" || !e.ctrlKey || e.altKey) return true;
-    if (e.key === "v" || e.key === "V") {
-      navigator.clipboard
-        ?.readText()
-        .then((raw) => {
-          if (!raw) return;
-          // claude/codex：成对 bracketed-paste 强制注入(不赌可能被 ConPTY 吞掉的 ?2004h 标志)，
-          // 让其把多行折叠成 [Pasted text +N lines]。两家计行用的换行符不同(实测)：
-          //   · claude 按 \r 计行(与真实终端 bracketed-paste 惯例一致，xterm/Win Terminal 都发 \r)；
-          //   · codex 按 \n 计行(发 \r 不折叠)。
-          // 发错换行符 → 数不出行数 → 不折叠(Ctrl+V 一直全量显示的真因)。
-          if (agentKind === "claude") {
-            const text = raw.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
-            invoke("write_terminal", {
-              id: termId,
-              data: `\x1b[200~${text}\x1b[201~`,
-            }).catch(() => {});
-          } else if (agentKind === "codex") {
-            const text = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-            invoke("write_terminal", {
-              id: termId,
-              data: `\x1b[200~${text}\x1b[201~`,
-            }).catch(() => {});
-          } else {
-            // 普通 shell：交给 xterm 原生 paste（按 bracketedPasteMode 决定是否包裹），不引入回归。
-            term.paste(raw);
-          }
-        })
-        .catch(() => {});
-      return false;
-    }
     if ((e.key === "c" || e.key === "C") && !e.shiftKey) {
       const sel = term.getSelection();
       if (sel) {
@@ -123,6 +103,24 @@ export function ensureEngine(
     }
     return true;
   });
+
+  // 粘贴：只走标准 paste 事件。capture 阶段在 host 上拦截 → preventDefault+stopPropagation，
+  // 让 xterm 自带的 paste 监听器(在内部 textarea 上)收不到 → 杜绝"Ctrl+V 粘两遍"。
+  // clipboardData 同步可读，无需 navigator.clipboard 权限。
+  el.addEventListener(
+    "paste",
+    (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const raw = ev.clipboardData?.getData("text") ?? "";
+      if (!raw) return;
+      invoke("write_terminal", {
+        id: termId,
+        data: pasteData(agentKind, raw),
+      }).catch(() => {});
+    },
+    true,
+  );
 
   engines.set(termId, {
     term,
@@ -139,7 +137,7 @@ export function ensureEngine(
   });
 }
 
-/** 按"当前已 fit 的真实列宽"创建后端 PTY（每个引擎只创建一次）。 */
+/** 按"当前已 fit 的真实列宽"创建后端 PTY（每个引擎只建一次）。 */
 function createPty(termId: string): void {
   const e = engines.get(termId);
   if (!e || e.created) return;
@@ -175,24 +173,32 @@ function createPty(termId: string): void {
 /** shell 就绪 + PTY 已按真实列宽建好后，发启动命令（claude/codex 在正确尺寸下首次绘制）。 */
 function maybeLaunch(termId: string): void {
   const e = engines.get(termId);
-  if (!e || e.launched || !e.launchArmed || !e.pendingLaunch || !e.created) return;
+  if (!e || e.launched || !e.launchArmed || !e.pendingLaunch || !e.created)
+    return;
   e.launched = true;
   invoke("write_terminal", { id: termId, data: e.pendingLaunch }).catch(
     () => {},
   );
 }
 
-/**
- * 尺寸稳定后：open(若未) + fit + 按最终列宽建 PTY。只由 fitAndResize 的防抖定时器调用。
- * 等尺寸稳再 open，渲染器按真实尺寸初始化 → 修"打字不刷新/卡死第一个字符"。
- * 用 DOM 渲染器(不挂 WebGL)：opacity 叠放下终端常驻渲染，WebGL 多上下文超浏览器上限 +
- * 纹理图集损坏(彩色噪块)；DOM 无图集、无上限、清屏干净。
- */
-function openFitCreate(termId: string): void {
+/** 防抖：合并连续尺寸变化（挂载布局抖动 / 拖动分屏），稳定 100ms 后只 fit 一次。 */
+function scheduleFit(termId: string): void {
   const e = engines.get(termId);
-  if (!e || e.created) return;
-  e.createTimer = undefined;
-  if (e.el.clientWidth === 0 || e.el.clientHeight === 0) return; // 又被隐藏 → 等下次 fit 重新防抖
+  if (!e) return;
+  if (e.fitTimer) clearTimeout(e.fitTimer);
+  e.fitTimer = window.setTimeout(() => doFit(termId), 100);
+}
+
+/**
+ * 尺寸稳定后：首次 open + fit + 按真实列宽建 PTY；之后仅在列宽/行高真的变了才 resize。
+ * 不做任何强制重绘 —— 重绘交给 xterm 渲染循环与内置 IntersectionObserver（恢复显示自会全量重画）。
+ */
+function doFit(termId: string): void {
+  const e = engines.get(termId);
+  if (!e) return;
+  e.fitTimer = undefined;
+  // 容器隐藏(display:none / 未布局)尺寸为 0：跳过；恢复显示时 xterm 内置 IntersectionObserver 自会重绘
+  if (e.el.clientWidth === 0 || e.el.clientHeight === 0) return;
   if (!e.opened) {
     e.term.open(e.el);
     e.opened = true;
@@ -201,85 +207,33 @@ function openFitCreate(termId: string): void {
   try {
     e.fit.fit();
   } catch {
-    return;
-  }
-  createPty(termId);
-}
-
-function fitAndResize(termId: string): void {
-  const e = engines.get(termId);
-  if (!e) return;
-  // 容器隐藏(display:none，如非活动 workspace/tab)或未布局时尺寸为 0：记下隐藏过、跳过
-  if (e.el.clientWidth === 0 || e.el.clientHeight === 0) {
-    e.hidden = true;
-    return;
-  }
-  // 还没建 PTY：防抖等容器尺寸稳定(连续 140ms 不变)再 open+fit+createPty。
-  // 根因修复：分屏/dockview 布局在挂载后头几帧会反复改面板尺寸，若此刻就按瞬时列宽建 PTY，
-  // claude 会按错误列宽启动绘制，layout 一稳就被 resize → 整屏光标定位重绘错位 → 与上一屏
-  // (启动 splash / resume 选择器)叠在同一行(画面重叠)；也表现为"卡死第一个字符、拖动才恢复"。
-  // 等尺寸稳定再建 → claude 一出生即最终列宽、启动期零 resize。
-  if (!e.created) {
-    if (e.createTimer) clearTimeout(e.createTimer);
-    e.createTimer = window.setTimeout(() => openFitCreate(termId), 140);
-    return;
-  }
-  if (!e.opened) return;
-  try {
-    e.fit.fit();
-  } catch {
     return; // 容器尺寸暂不可用
   }
+  if (!e.created) {
+    createPty(termId); // 尺寸已稳 → 按真实列宽建 PTY（claude 一出生即最终尺寸，启动期零 resize）
+    return;
+  }
   const { cols, rows } = e.term;
-  const wasHidden = e.hidden === true;
-  e.hidden = false;
   if (cols !== e.lastCols || rows !== e.lastRows) {
-    // 尺寸变了：去重后 resize PTY + 重画
     e.lastCols = cols;
     e.lastRows = rows;
     invoke("resize_terminal", { id: termId, cols, rows }).catch(() => {});
-    try {
-      e.term.refresh(0, e.term.rows - 1);
-    } catch {
-      /* ignore */
-    }
-  } else if (wasHidden) {
-    // 尺寸没变但刚从隐藏(display:none)恢复 → WebGL/DOM 都需强制重画一遍，否则空白/残留
-    try {
-      e.term.refresh(0, e.term.rows - 1);
-    } catch {
-      /* ignore */
-    }
   }
   maybeLaunch(termId);
 }
 
-/**
- * 外部（dockview 尺寸/可见性事件）触发 fit + resize + **强制重绘**。
- * 重绘修复：面板从隐藏(回欢迎页/切走 workspace)恢复显示后，xterm 视口不会自动重画
- * （尤其 codex/claude 这类全屏 TUI 没收到 resize 就不重绘）→ 整片空白。refresh 从
- * xterm 自身缓冲重画一遍即可恢复。
- */
+/** 外部（dockview 尺寸/可见性事件）触发重排：仅防抖 fit，重绘交给 xterm 自身。 */
 export function refitEngine(termId: string): void {
-  fitAndResize(termId);
-  const e = engines.get(termId);
-  if (e && e.opened && e.created) {
-    try {
-      e.term.refresh(0, e.term.rows - 1);
-    } catch {
-      /* ignore */
-    }
-  }
+  scheduleFit(termId);
 }
 
-/** 把引擎挂进容器（首次挂载时才 open），并监听尺寸。 */
+/** 把引擎挂进容器（open 推迟到 doFit 容器就绪时），并监听尺寸。 */
 export function attachEngine(termId: string, container: HTMLElement): void {
   const e = engines.get(termId);
   if (!e) return;
   container.appendChild(e.el);
-  // open() + 挂 WebGL 推迟到 fitAndResize（容器已就绪、尺寸非 0 时），避免按 0 尺寸初始化渲染器
-  requestAnimationFrame(() => fitAndResize(termId));
-  const ro = new ResizeObserver(() => fitAndResize(termId));
+  requestAnimationFrame(() => scheduleFit(termId));
+  const ro = new ResizeObserver(() => scheduleFit(termId));
   ro.observe(container);
   e.ro = ro;
   if (e.opened) e.term.focus();
@@ -291,6 +245,7 @@ export function detachEngine(termId: string): void {
   if (!e) return;
   e.ro?.disconnect();
   e.ro = undefined;
+  if (e.fitTimer) clearTimeout(e.fitTimer);
   e.el.parentElement?.removeChild(e.el);
 }
 
@@ -299,7 +254,7 @@ export function disposeEngine(termId: string): void {
   const e = engines.get(termId);
   if (!e) return;
   e.ro?.disconnect();
-  if (e.createTimer) clearTimeout(e.createTimer); // 取消未触发的延迟建 PTY，避免销毁/建立竞态
+  if (e.fitTimer) clearTimeout(e.fitTimer);
   if (e.created) invoke("close_terminal", { id: termId }).catch(() => {});
   e.term.dispose();
   e.el.parentElement?.removeChild(e.el);
@@ -324,30 +279,5 @@ export function setEngineTitleHandler(
 export function disposeByPrefix(prefix: string): void {
   for (const id of [...engines.keys()]) {
     if (id.startsWith(prefix)) disposeEngine(id);
-  }
-}
-
-/**
- * 强制重排 + 重画某 workspace 的全部终端。工作区从隐藏(回欢迎页/切走，display:none)恢复显示时调用。
- * 由 React(知道哪个工作区 active)驱动，不依赖 ResizeObserver（祖先 display 切换它不一定触发）。
- */
-export function redrawByPrefix(prefix: string): void {
-  for (const id of [...engines.keys()]) {
-    if (!id.startsWith(prefix)) continue;
-    fitAndResize(id); // open-if-needed + fit + 去重 resize
-    const e = engines.get(id);
-    if (
-      e &&
-      e.opened &&
-      e.created &&
-      e.el.clientWidth > 0 &&
-      e.el.clientHeight > 0
-    ) {
-      try {
-        e.term.refresh(0, e.term.rows - 1); // 无条件强制重画（修恢复显示后的空白）
-      } catch {
-        /* ignore */
-      }
-    }
   }
 }
