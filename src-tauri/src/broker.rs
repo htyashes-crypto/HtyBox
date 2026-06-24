@@ -72,11 +72,18 @@ impl Broker {
         params: Option<&Value>,
     ) -> Result<Value, (i64, String)> {
         match method {
-            "initialize" => Ok(json!({
-                "protocolVersion": PROTOCOL_VERSION,
-                "capabilities": { "tools": {} },
-                "serverInfo": { "name": "htybox-broker", "version": "0.1.0" }
-            })),
+            "initialize" => {
+                // 回显客户端请求的协议版本：codex 原生 MCP 客户端对版本不匹配会拒绝握手
+                let pv = params
+                    .and_then(|p| p.get("protocolVersion"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(PROTOCOL_VERSION);
+                Ok(json!({
+                    "protocolVersion": pv,
+                    "capabilities": { "tools": {} },
+                    "serverInfo": { "name": "htybox-broker", "version": "0.1.0" }
+                }))
+            }
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": tool_defs() })),
             "tools/call" => {

@@ -1,5 +1,6 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 
@@ -183,6 +184,14 @@ export function attachEngine(termId: string, container: HTMLElement): void {
   if (!e.opened) {
     e.term.open(e.el);
     e.opened = true;
+    // WebGL 渲染器：DOM 渲染器有"输出不自动重绘、要 resize 才刷新"的毛病；失败则退回 DOM
+    try {
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => webgl.dispose());
+      e.term.loadAddon(webgl);
+    } catch {
+      /* WebGL 不可用 → 退回 DOM 渲染 */
+    }
   }
   requestAnimationFrame(() => fitAndResize(termId));
   const ro = new ResizeObserver(() => fitAndResize(termId));

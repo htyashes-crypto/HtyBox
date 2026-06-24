@@ -79,6 +79,23 @@ const saveSN = () => {
   }
 };
 
+// agent 终端的身份标签(termId→"👑 负责人")。Tab 显示为「身份（会话名）」，不锁死会话名。
+const AL_KEY = "htybox.agentLabels.v1";
+const AGENT_LABELS: Record<string, string> = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(AL_KEY) || "{}");
+  } catch {
+    return {};
+  }
+})();
+const saveAL = () => {
+  try {
+    localStorage.setItem(AL_KEY, JSON.stringify(AGENT_LABELS));
+  } catch {
+    /* ignore */
+  }
+};
+
 // 本次运行中由布局复原出来的终端 id → 启动时发"复原命令"（claude --resume / codex resume）。
 const RESTORED_IDS = new Set<string>();
 
@@ -178,19 +195,35 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
     setEngineTitleHandler(termId, (t) => {
       const title = t.trim();
       if (!title) return;
-      if (!CUSTOM_TITLES[termId]) props.api.setTitle(title);
-      // 仅 agent 终端记会话名；滤掉 shell 启动时的 exe 路径标题（如 C:\...\powershell.exe）
+      // 记会话名(供 resume + agent Tab 显示)；滤掉 shell 启动时的 exe 路径标题
+      const isAgent = agentKind === "claude" || agentKind === "codex";
       if (
-        (agentKind === "claude" || agentKind === "codex") &&
+        isAgent &&
         !/^[a-zA-Z]:[\\/]/.test(title) &&
         SESSION_NAMES[termId] !== title
       ) {
         SESSION_NAMES[termId] = title;
         saveSN();
       }
+      // Tab 显示优先级：用户手动重命名 > 身份（会话名） > 会话名
+      if (CUSTOM_TITLES[termId]) return;
+      const role = AGENT_LABELS[termId];
+      if (role) {
+        const sess = SESSION_NAMES[termId];
+        props.api.setTitle(sess ? `${role}（${sess}）` : role);
+      } else {
+        props.api.setTitle(title);
+      }
     });
-    // 复原时若该终端有自定义名，立即恢复（之后程序标题也不会覆盖它）
-    if (CUSTOM_TITLES[termId]) props.api.setTitle(CUSTOM_TITLES[termId]);
+    // 挂载/复原时先把 Tab 摆正：用户重命名 > 身份（会话名） > 保持原标题
+    if (CUSTOM_TITLES[termId]) {
+      props.api.setTitle(CUSTOM_TITLES[termId]);
+    } else if (AGENT_LABELS[termId]) {
+      const sess = SESSION_NAMES[termId];
+      props.api.setTitle(
+        sess ? `${AGENT_LABELS[termId]}（${sess}）` : AGENT_LABELS[termId],
+      );
+    }
 
     const onDragOver = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes(DRAG_MIME)) {
@@ -325,6 +358,10 @@ export default function TerminalDock({
           delete SESSION_NAMES[termId];
           saveSN();
         }
+        if (AGENT_LABELS[termId]) {
+          delete AGENT_LABELS[termId];
+          saveAL();
+        }
       });
 
       api.onDidLayoutChange(() => {
@@ -402,10 +439,10 @@ export default function TerminalDock({
           continue;
         }
         const id = mkId();
-        // 钉住角色名为 Tab 标题（👑Lead / 🔧worker），不被 claude 会话名自动覆盖
+        // 身份标签（👑Lead / 🔧worker）；Tab 显示为「身份（会话名）」，会话名随 onTitle 更新
         const label = (spec.role === "lead" ? "👑 " : "🔧 ") + spec.roleName;
-        CUSTOM_TITLES[id] = label;
-        saveCT();
+        AGENT_LABELS[id] = label;
+        saveAL();
         // claude 读 .mcp.json、codex 读 .codex/config.toml（setupMcpAgent 已分别写好）；普通启动即可
         api.addPanel({
           id,
