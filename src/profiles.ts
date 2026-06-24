@@ -41,20 +41,21 @@ export const PROFILES: Profile[] = [
 export const DEFAULT_PROFILE = PROFILES[0];
 
 /**
- * 计算终端启动后自动发送的命令。复原(resume)走"交互式会话选择器"：
- * 实测 claude 交互模式【忽略】--session-id（会自生成 id，故 --resume <我们的 uuid> 必然
- * "No conversation found"，已用 ~/.claude/projects 会话文件证实）。改用 claude/codex 自带选择器
- * ——用户选回上次会话，多会话也能各选各的、不依赖我们猜 id/slug，正是用户说的"用 /resume 回去"。
- * - claude：新建 `claude`，复原 `claude --resume`（弹会话选择器）
- * - codex：新建 `codex`，复原 `codex resume`（弹会话选择器）
+ * 计算终端启动后自动发送的命令。复原(resume)=【自动续上当前目录最近一次会话】(零点击)：
+ * 实测 claude 交互模式【忽略】--session-id（自生成 id，--resume <我们的 uuid> 必 "No conversation
+ * found"，已用会话文件证实），故不能靠预设 id。改用 cwd 维度的"最近一次"：
+ * - claude：新建 `claude`，复原 `claude -c`（continue 当前目录最近一次会话，无需选择器）
+ * - codex：新建 `codex`，复原 `codex resume --last`（当前目录最近一次）
  * - shell：无启动命令。
+ * 注：终端 cwd=工作区文件夹，故"最近一次"通常就是上次那个会话。若同一工作区开了多个
+ * 同类 agent，它们会都续到"最近那一个"（无法各自精确区分）——需精确则要后端抓真实 session id。
  */
 export function launchCmdFor(
   agent: AgentKind,
   resume: boolean,
 ): string | undefined {
-  if (agent === "claude") return resume ? "claude --resume\r" : "claude\r";
-  if (agent === "codex") return resume ? "codex resume\r" : "codex\r";
+  if (agent === "claude") return resume ? "claude -c\r" : "claude\r";
+  if (agent === "codex") return resume ? "codex resume --last\r" : "codex\r";
   return undefined;
 }
 

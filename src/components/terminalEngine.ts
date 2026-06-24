@@ -19,6 +19,11 @@ interface Engine {
   opened: boolean;
   ro?: ResizeObserver;
   onTitle?: (title: string) => void; // 程序设置终端标题时回调（Tab 自动命名）
+  pendingLaunch?: string; // 待发的启动命令（如 "claude\r"），等"shell就绪+尺寸已fit"才发
+  launchArmed: boolean; // shell 提示符已就绪（create 后 ~600ms）
+  launched: boolean; // 启动命令已发出
+  lastCols?: number; // 上次发给 PTY 的尺寸；去重避免多余 SIGWINCH 把运行中的 TUI 画花
+  lastRows?: number;
 }
 
 const engines = new Map<string, Engine>();
@@ -66,14 +71,15 @@ export function ensureEngine(
     onOutput,
   })
     .then(() => {
-      // 等 shell 起到提示符，再自动发送启动命令（如 "claude\r"）
-      if (launchCmd) {
-        setTimeout(() => {
-          invoke("write_terminal", { id: termId, data: launchCmd }).catch(
-            () => {},
-          );
-        }, 600);
-      }
+      // shell 起到提示符（~600ms）后"武装"启动命令；真正发送要等尺寸已 fit（见 maybeLaunch），
+      // 避免 claude/codex 在默认 80 列下先画、再被 resize 重排成花屏。
+      setTimeout(() => {
+        const e = engines.get(termId);
+        if (e) {
+          e.launchArmed = true;
+          maybeLaunch(termId);
+        }
+      }, 600);
     })
     .catch((err) =>
       term.write(`\r\n\x1b[31m[create_terminal 失败] ${err}\x1b[0m\r\n`),
@@ -84,7 +90,29 @@ export function ensureEngine(
     invoke("write_terminal", { id: termId, data }).catch(() => {}),
   );
 
-  engines.set(termId, { term, fit, el, opened: false });
+  engines.set(termId, {
+    term,
+    fit,
+    el,
+    opened: false,
+    pendingLaunch: launchCmd,
+    launchArmed: false,
+    launched: false,
+  });
+}
+
+/**
+ * 在"shell 就绪 + 容器已 fit 到真实尺寸"后才发启动命令——保证 claude/codex 的 TUI
+ * 在正确列宽下首次绘制（lastCols 已被一次成功 fit 写入即代表尺寸就绪）。
+ */
+function maybeLaunch(termId: string): void {
+  const e = engines.get(termId);
+  if (!e || e.launched || !e.launchArmed || !e.pendingLaunch) return;
+  if (!e.opened || e.lastCols === undefined) return; // 等第一次成功 fit 拿到真实列宽
+  e.launched = true;
+  invoke("write_terminal", { id: termId, data: e.pendingLaunch }).catch(
+    () => {},
+  );
 }
 
 function fitAndResize(termId: string): void {
@@ -94,14 +122,17 @@ function fitAndResize(termId: string): void {
   if (e.el.clientWidth === 0 || e.el.clientHeight === 0) return;
   try {
     e.fit.fit();
-    invoke("resize_terminal", {
-      id: termId,
-      cols: e.term.cols,
-      rows: e.term.rows,
-    }).catch(() => {});
+    const { cols, rows } = e.term;
+    // 去重：尺寸没变就不再 resize PTY，避免多余 SIGWINCH 把运行中的 TUI 画花
+    if (cols !== e.lastCols || rows !== e.lastRows) {
+      e.lastCols = cols;
+      e.lastRows = rows;
+      invoke("resize_terminal", { id: termId, cols, rows }).catch(() => {});
+    }
   } catch {
     /* 容器尺寸暂不可用，忽略 */
   }
+  maybeLaunch(termId); // 尺寸已就绪时若 shell 也 ready，则发启动命令
 }
 
 /** 把引擎挂进容器（首次挂载时才 open），并监听尺寸。 */
