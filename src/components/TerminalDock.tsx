@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   DockviewReact,
   type DockviewApi,
   type DockviewReadyEvent,
   type IDockviewPanelProps,
+  type IDockviewPanelHeaderProps,
 } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
 import {
@@ -13,11 +14,13 @@ import {
   detachEngine,
   disposeEngine,
   focusEngine,
+  setEngineTitleHandler,
 } from "./terminalEngine";
 import {
   PROFILES,
   DEFAULT_PROFILE,
   injectText,
+  launchCmdFor,
   type AgentKind,
   type DragItem,
   type Profile,
@@ -28,22 +31,124 @@ import codexIcon from "../assets/codex.svg";
 type TermParams = {
   termId: string;
   shell?: string;
-  launchCmd?: string;
   agentKind?: AgentKind;
   cwd?: string;
+  sessionId?: string; // claude：固定会话 UUID，用于精确复原（多会话不串）
 };
 
 const DRAG_MIME = "application/x-htybox-item";
 
-/** dockview 面板：挂终端引擎 + 作为 skill/memory 拖拽落点（按本终端 agent 类型注入）。 */
+// 用户手动重命名过的 Tab（termId→名字），持久化；自动命名遇到它会跳过、不覆盖。
+const CT_KEY = "htybox.customTitles.v1";
+const CUSTOM_TITLES: Record<string, string> = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(CT_KEY) || "{}");
+  } catch {
+    return {};
+  }
+})();
+const saveCT = () => {
+  try {
+    localStorage.setItem(CT_KEY, JSON.stringify(CUSTOM_TITLES));
+  } catch {
+    /* ignore */
+  }
+};
+
+// 本次运行中由布局复原出来的终端 id → 启动时发"复原命令"（claude --resume / codex resume）。
+const RESTORED_IDS = new Set<string>();
+
+/** 生成合法 v4 UUID（claude --session-id 要求合法 UUID）；优先用原生 API。 */
+function uuid(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    return (ch === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+/** 自定义 Tab：自动命名标题 + 双击内联重命名（重命名后不被自动命名覆盖）+ 关闭。 */
+function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
+  const [title, setTitle] = useState(props.api.title ?? "");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  useEffect(() => {
+    const d = props.api.onDidTitleChange((e) => setTitle(e.title));
+    return () => d.dispose();
+  }, [props.api]);
+
+  const startRename = () => {
+    setDraft(title);
+    setEditing(true);
+  };
+  const commit = () => {
+    const t = draft.trim();
+    if (t) {
+      CUSTOM_TITLES[props.params.termId] = t;
+      saveCT();
+      props.api.setTitle(t);
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") commit();
+          else if (e.key === "Escape") setEditing(false);
+        }}
+        className="my-1 w-[150px] rounded border border-[#d4a27f] bg-white px-1.5 py-0.5 text-xs text-[#191919] outline-none"
+      />
+    );
+  }
+
+  return (
+    <div
+      onDoubleClick={startRename}
+      title="双击重命名"
+      className="flex h-full items-center gap-2 px-2 text-xs"
+    >
+      <span className="max-w-[180px] truncate">{title}</span>
+      <span
+        onClick={(e) => {
+          e.stopPropagation();
+          props.api.close();
+        }}
+        className="flex h-4 w-4 items-center justify-center rounded text-[13px] leading-none text-[#a8a29a] hover:bg-[#e5e2d9] hover:text-[#191919]"
+      >
+        ✕
+      </span>
+    </div>
+  );
+}
+
+/** dockview 面板：挂终端引擎 + 自动命名 + 作为 skill/memory 拖拽落点。 */
 function DockTerminal(props: IDockviewPanelProps<TermParams>) {
-  const { termId, shell, launchCmd, agentKind = "shell", cwd } = props.params;
+  const { termId, shell, agentKind = "shell", cwd, sessionId } = props.params;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    ensureEngine(termId, shell, launchCmd, cwd);
+    // 复原出来的终端发"回到上次会话"的命令，否则发新建命令
+    const launch = launchCmdFor(agentKind, RESTORED_IDS.has(termId), sessionId);
+    ensureEngine(termId, shell, launch, cwd);
     attachEngine(termId, c);
+
+    // 自动命名：程序设置终端标题(OSC)时同步到 Tab；已被用户重命名的跳过
+    setEngineTitleHandler(termId, (t) => {
+      const title = t.trim();
+      if (title && !CUSTOM_TITLES[termId]) props.api.setTitle(title);
+    });
+    // 复原时若该终端有自定义名，立即恢复（之后程序标题也不会覆盖它）
+    if (CUSTOM_TITLES[termId]) props.api.setTitle(CUSTOM_TITLES[termId]);
 
     const onDragOver = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes(DRAG_MIME)) {
@@ -79,9 +184,10 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
       c.removeEventListener("dragover", onDragOver);
       c.removeEventListener("dragleave", onDragLeave);
       c.removeEventListener("drop", onDrop);
+      setEngineTitleHandler(termId, undefined);
       detachEngine(termId);
     };
-  }, [termId, shell, launchCmd, agentKind, cwd]);
+  }, [termId, shell, agentKind, cwd, sessionId, props.api]);
   // 内边距 + 终端底色：避免 xterm 内容贴边被面板边缘裁切
   return <div ref={ref} className="h-full w-full bg-[#1f1e1d] p-2" />;
 }
@@ -122,9 +228,9 @@ const titleFor = (p: Profile) =>
 const paramsFor = (p: Profile, id: string, cwd: string): TermParams => ({
   termId: id,
   shell: p.shell,
-  launchCmd: p.launchCmd,
   agentKind: p.agentKind,
   cwd,
+  sessionId: p.agentKind === "claude" ? uuid() : undefined,
 });
 
 /** 终端区：一个 workspace 一个实例；终端 id/布局键按 workspace 隔离，cwd=工作区文件夹。 */
@@ -163,7 +269,13 @@ export default function TerminalDock({
 
       api.onDidRemovePanel((panel) => {
         const termId = (panel.params as TermParams | undefined)?.termId;
-        if (termId) disposeEngine(termId);
+        if (termId) {
+          disposeEngine(termId);
+          if (CUSTOM_TITLES[termId]) {
+            delete CUSTOM_TITLES[termId];
+            saveCT();
+          }
+        }
       });
 
       api.onDidLayoutChange(() => {
@@ -180,6 +292,12 @@ export default function TerminalDock({
         try {
           api.fromJSON(JSON.parse(saved));
           restored = api.panels.length > 0;
+          // 标记为"复原"，DockTerminal 启动时改发 resume 命令
+          if (restored)
+            api.panels.forEach((p) => {
+              const tid = (p.params as TermParams | undefined)?.termId;
+              if (tid) RESTORED_IDS.add(tid);
+            });
         } catch {
           restored = false;
         }
@@ -224,7 +342,11 @@ export default function TerminalDock({
         ))}
       </div>
       <div className="dockview-theme-light min-h-0 flex-1">
-        <DockviewReact components={components} onReady={onReady} />
+        <DockviewReact
+          components={components}
+          defaultTabComponent={DockTab}
+          onReady={onReady}
+        />
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ interface Engine {
   el: HTMLDivElement; // 游离 host 元素，承载 xterm
   opened: boolean;
   ro?: ResizeObserver;
+  onTitle?: (title: string) => void; // 程序设置终端标题时回调（Tab 自动命名）
 }
 
 const engines = new Map<string, Engine>();
@@ -49,6 +50,11 @@ export function ensureEngine(
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+
+  // 程序通过 OSC 设置终端标题时回调（用于 Tab 自动命名）
+  term.onTitleChange((title) => {
+    engines.get(termId)?.onTitle?.(title);
+  });
 
   // 后端 → 前端：PTY 输出（先 write 进缓冲，open 后渲染）
   const onOutput = new Channel<number[]>();
@@ -137,6 +143,15 @@ export function disposeEngine(termId: string): void {
 /** 让某终端获得键盘焦点（拖拽注入后调用）。 */
 export function focusEngine(termId: string): void {
   engines.get(termId)?.term.focus();
+}
+
+/** 注册/清除"终端标题变化"回调（Tab 自动命名用）。 */
+export function setEngineTitleHandler(
+  termId: string,
+  fn: ((title: string) => void) | undefined,
+): void {
+  const e = engines.get(termId);
+  if (e) e.onTitle = fn;
 }
 
 /** 结束某前缀（= 某 workspace）的所有终端，关闭工作区时用。 */
