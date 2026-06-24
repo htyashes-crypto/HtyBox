@@ -184,7 +184,7 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
       restored,
       restored ? SESSION_NAMES[termId] : undefined,
     );
-    ensureEngine(termId, shell, launch, cwd, env);
+    ensureEngine(termId, shell, launch, cwd, env, agentKind);
     attachEngine(termId, c);
 
     // dockview 自身的尺寸/可见性事件 → 可靠 refit（比 DOM ResizeObserver 更准；

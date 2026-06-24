@@ -1,6 +1,5 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebglAddon } from "@xterm/addon-webgl";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 
@@ -46,6 +45,7 @@ export function ensureEngine(
   launchCmd?: string,
   cwd?: string,
   env?: Record<string, string>,
+  agentKind?: string, // "claude"|"codex"|"shell"：粘贴时据此对 agent 终端强制 bracketed 折叠
 ): void {
   if (engines.has(termId)) return;
 
@@ -85,8 +85,24 @@ export function ensureEngine(
     if (e.key === "v" || e.key === "V") {
       navigator.clipboard
         ?.readText()
-        .then((t) => {
-          if (t) term.paste(t);
+        .then((raw) => {
+          if (!raw) return;
+          const isAgent = agentKind === "claude" || agentKind === "codex";
+          if (isAgent) {
+            // 成对 bracketed-paste 注入，让 claude/codex 把多行折叠成 [Pasted text +N lines]：
+            // ① 换行规范成 \n —— claude/codex 按 \n 计行，xterm 原生 paste 会把 \n 转成 \r
+            //    反而让它数不出行 → 不折叠（这正是之前一直不折叠的根因）。
+            // ② agent 终端按 profile 强制包裹，不赌 ?2004h 标志(可能被 ConPTY 吞掉或切换瞬间滞后)。
+            const text = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+            invoke("write_terminal", {
+              id: termId,
+              data: `\x1b[200~${text}\x1b[201~`,
+            }).catch(() => {});
+          } else {
+            // 普通 shell：交给 xterm 原生 paste（自动按 bracketedPasteMode 决定是否包裹），
+            // 保持已验证可用的行为，不引入回归。
+            term.paste(raw);
+          }
         })
         .catch(() => {});
       return false;
@@ -171,16 +187,15 @@ function fitAndResize(termId: string): void {
   // 容器已就绪才首次 open + 挂 WebGL：渲染器按真实尺寸初始化，避免"打字不刷新/残留"
   // （attach 那一刻 dockview 可能还没量好尺寸，按 0 尺寸 open 会让字符测量/渲染卡住）
   if (!e.opened) {
+    // 容器已就绪(尺寸非 0)才 open，渲染器按真实尺寸初始化 → 修打字残留。
+    // 用 DOM 渲染器(不挂 WebGL)：opacity 叠放下所有终端常驻渲染，WebGL 多上下文易超浏览器
+    // 上限 + 纹理图集损坏(彩色噪块/内容重叠)；DOM 无图集、无上限，清屏干净。
     e.term.open(e.el);
     e.opened = true;
-    try {
-      const webgl = new WebglAddon();
-      webgl.onContextLoss(() => webgl.dispose());
-      e.term.loadAddon(webgl);
-    } catch {
-      /* WebGL 不可用 → 退回 DOM 渲染 */
-    }
     e.term.focus();
+    // 分屏/布局在 open 后的下一帧才完全稳定：再走一次完整 fit(+按需 resize PTY)+重绘，
+    // 修"open 那刻面板尺寸瞬时不准 → 字符测量卡住、增量写不刷新、要拖动才恢复"(卡死第一个字符根因)
+    requestAnimationFrame(() => fitAndResize(termId));
   }
   try {
     e.fit.fit();
