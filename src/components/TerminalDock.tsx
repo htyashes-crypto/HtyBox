@@ -114,11 +114,8 @@ function ProfileIcon({ id }: { id: string }) {
 const components = { terminal: DockTerminal };
 
 let seq = 0;
-const newId = () => `t-${Date.now().toString(36)}-${(seq++).toString(36)}`;
 let termNo = 0;
 const nextTitle = () => `终端${++termNo}`;
-const LAYOUT_KEY = "htybox.dock.layout.v1";
-
 const titleFor = (p: Profile) =>
   p.agentKind === "shell" ? nextTitle() : `${nextTitle()} · ${p.label}`;
 const paramsFor = (p: Profile, id: string): TermParams => ({
@@ -128,68 +125,80 @@ const paramsFor = (p: Profile, id: string): TermParams => ({
   agentKind: p.agentKind,
 });
 
-export default function TerminalDock() {
+/** 终端区：一个 workspace 一个实例；终端 id / 布局键按 workspace 隔离。 */
+export default function TerminalDock({ workspaceId }: { workspaceId: string }) {
   const apiRef = useRef<DockviewApi | null>(null);
+  const layoutKey = `htybox.dock.layout.${workspaceId}`;
+  const mkId = () =>
+    `${workspaceId}::t-${Date.now().toString(36)}-${(seq++).toString(36)}`;
 
-  const addTerminal = useCallback((profile: Profile) => {
-    const api = apiRef.current;
-    if (!api) return;
-    const id = newId();
-    api.addPanel({
-      id,
-      component: "terminal",
-      title: titleFor(profile),
-      params: paramsFor(profile, id),
-    });
-  }, []);
-
-  const onReady = useCallback((event: DockviewReadyEvent) => {
-    const api = event.api;
-    apiRef.current = api;
-
-    api.onDidRemovePanel((panel) => {
-      const termId = (panel.params as TermParams | undefined)?.termId;
-      if (termId) disposeEngine(termId);
-    });
-
-    api.onDidLayoutChange(() => {
-      try {
-        localStorage.setItem(LAYOUT_KEY, JSON.stringify(api.toJSON()));
-      } catch {
-        /* ignore */
-      }
-    });
-
-    let restored = false;
-    const saved = localStorage.getItem(LAYOUT_KEY);
-    if (saved) {
-      try {
-        api.fromJSON(JSON.parse(saved));
-        restored = api.panels.length > 0;
-      } catch {
-        restored = false;
-      }
-    }
-    if (restored) {
-      termNo = api.panels.length;
-    } else {
-      const id1 = newId();
+  const addTerminal = useCallback(
+    (profile: Profile) => {
+      const api = apiRef.current;
+      if (!api) return;
+      const id = mkId();
       api.addPanel({
-        id: id1,
+        id,
         component: "terminal",
-        title: titleFor(DEFAULT_PROFILE),
-        params: paramsFor(DEFAULT_PROFILE, id1),
+        title: titleFor(profile),
+        params: paramsFor(profile, id),
       });
-      const id2 = newId();
-      api.addPanel({
-        id: id2,
-        component: "terminal",
-        title: titleFor(DEFAULT_PROFILE),
-        params: paramsFor(DEFAULT_PROFILE, id2),
-        position: { referencePanel: id1, direction: "right" },
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const onReady = useCallback(
+    (event: DockviewReadyEvent) => {
+      const api = event.api;
+      apiRef.current = api;
+
+      api.onDidRemovePanel((panel) => {
+        const termId = (panel.params as TermParams | undefined)?.termId;
+        if (termId) disposeEngine(termId);
       });
-    }
-  }, []);
+
+      api.onDidLayoutChange(() => {
+        try {
+          localStorage.setItem(layoutKey, JSON.stringify(api.toJSON()));
+        } catch {
+          /* ignore */
+        }
+      });
+
+      let restored = false;
+      const saved = localStorage.getItem(layoutKey);
+      if (saved) {
+        try {
+          api.fromJSON(JSON.parse(saved));
+          restored = api.panels.length > 0;
+        } catch {
+          restored = false;
+        }
+      }
+      if (restored) {
+        termNo = Math.max(termNo, api.panels.length);
+      } else {
+        const id1 = mkId();
+        api.addPanel({
+          id: id1,
+          component: "terminal",
+          title: titleFor(DEFAULT_PROFILE),
+          params: paramsFor(DEFAULT_PROFILE, id1),
+        });
+        const id2 = mkId();
+        api.addPanel({
+          id: id2,
+          component: "terminal",
+          title: titleFor(DEFAULT_PROFILE),
+          params: paramsFor(DEFAULT_PROFILE, id2),
+          position: { referencePanel: id1, direction: "right" },
+        });
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   return (
     <div className="flex h-full w-full flex-col bg-[#1f1e1d]">
@@ -205,9 +214,6 @@ export default function TerminalDock() {
             <ProfileIcon id={p.id} />
           </button>
         ))}
-        <span className="ml-2 text-[10px] text-[#8c8a82]">
-          点图标新建对应终端 · 拖标签分屏/重排 · 拖 skill/memory 注入(Shift 直接发送)
-        </span>
       </div>
       <div className="dockview-theme-light min-h-0 flex-1">
         <DockviewReact components={components} onReady={onReady} />
