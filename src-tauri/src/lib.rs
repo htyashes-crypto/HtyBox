@@ -47,6 +47,11 @@ fn list_skills(project_dir: Option<String>) -> Vec<catalog::Skill> {
 }
 
 #[tauri::command]
+fn list_project_skills(project_dir: String) -> Vec<catalog::Skill> {
+    catalog::scan_project_skills(&project_dir)
+}
+
+#[tauri::command]
 fn list_memories(slug: String) -> Vec<catalog::MemoryItem> {
     catalog::scan_memories(&slug)
 }
@@ -60,6 +65,7 @@ fn list_projects() -> Vec<catalog::ProjectRef> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .setup(|app| {
             watcher::start(app.handle().clone());
@@ -71,6 +77,7 @@ pub fn run() {
             resize_terminal,
             close_terminal,
             list_skills,
+            list_project_skills,
             list_memories,
             list_projects
         ])

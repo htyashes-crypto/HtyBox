@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  listMemories,
-  listProjects,
-  type MemoryItem,
-  type ProjectRef,
-} from "../catalog";
+import { listMemories, type MemoryItem } from "../catalog";
 import SearchBox from "./ui/SearchBox";
 import { listen } from "@tauri-apps/api/event";
 
@@ -15,20 +10,10 @@ const typeColor: Record<string, string> = {
   reference: "#4f7cc4",
 };
 
-export default function MemoryPanel() {
-  const [projects, setProjects] = useState<ProjectRef[]>([]);
-  const [slug, setSlug] = useState("");
+/** 只显示当前工作区绑定的 memory（~/.claude/projects/<slug>/memory）。 */
+export default function MemoryPanel({ slug }: { slug: string }) {
   const [items, setItems] = useState<MemoryItem[]>([]);
   const [q, setQ] = useState("");
-
-  useEffect(() => {
-    listProjects()
-      .then((ps) => {
-        setProjects(ps);
-        if (ps.length) setSlug(ps[0].slug);
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     let un: (() => void) | undefined;
@@ -61,26 +46,12 @@ export default function MemoryPanel() {
   return (
     <div className="flex h-full flex-col bg-[#f4f3ee]">
       <div className="px-2.5 pt-1 pb-2">
-        <select
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-          className="w-full rounded-lg border border-[#e5e2d9] bg-white px-2 py-1.5 font-mono text-[11px] text-[#3d3d3a] outline-none focus:border-[#d97757]"
-        >
-          {projects.length === 0 && <option value="">（无 memory 项目）</option>}
-          {projects.map((p) => (
-            <option key={p.slug} value={p.slug}>
-              {p.slug} ({p.memoryCount})
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="px-2.5 pb-2">
-        <SearchBox value={q} onChange={setQ} placeholder="搜索 memory…" />
+        <SearchBox value={q} onChange={setQ} placeholder="搜索本工作区 memory…" />
       </div>
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2.5 pb-3">
         {list.length === 0 && (
           <div className="px-1 pt-6 text-center text-[11px] text-[#a8a29a]">
-            无 memory
+            本工作区暂无 memory
           </div>
         )}
         {list.map((m) => {

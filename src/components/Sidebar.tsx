@@ -40,7 +40,13 @@ const TABS: { id: Tab; label: string; icon: () => ReactElement }[] = [
   { id: "memory", label: "Memory", icon: MemoryIcon },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({
+  workspacePath,
+  workspaceSlug,
+}: {
+  workspacePath: string;
+  workspaceSlug: string;
+}) {
   const [tab, setTab] = useState<Tab>("skill");
   return (
     <div className="flex h-full flex-col bg-[#f4f3ee]">
@@ -68,9 +74,13 @@ export default function Sidebar() {
           })}
         </div>
       </div>
-      {/* 活动面板 */}
+      {/* 活动面板（作用域 = 当前工作区文件夹） */}
       <div className="min-h-0 flex-1">
-        {tab === "skill" ? <SkillPanel /> : <MemoryPanel />}
+        {tab === "skill" ? (
+          <SkillPanel projectDir={workspacePath} />
+        ) : (
+          <MemoryPanel slug={workspaceSlug} />
+        )}
       </div>
     </div>
   );

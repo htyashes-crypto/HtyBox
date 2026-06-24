@@ -30,18 +30,19 @@ type TermParams = {
   shell?: string;
   launchCmd?: string;
   agentKind?: AgentKind;
+  cwd?: string;
 };
 
 const DRAG_MIME = "application/x-htybox-item";
 
 /** dockview 面板：挂终端引擎 + 作为 skill/memory 拖拽落点（按本终端 agent 类型注入）。 */
 function DockTerminal(props: IDockviewPanelProps<TermParams>) {
-  const { termId, shell, launchCmd, agentKind = "shell" } = props.params;
+  const { termId, shell, launchCmd, agentKind = "shell", cwd } = props.params;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    ensureEngine(termId, shell, launchCmd);
+    ensureEngine(termId, shell, launchCmd, cwd);
     attachEngine(termId, c);
 
     const onDragOver = (e: DragEvent) => {
@@ -80,7 +81,7 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
       c.removeEventListener("drop", onDrop);
       detachEngine(termId);
     };
-  }, [termId, shell, launchCmd, agentKind]);
+  }, [termId, shell, launchCmd, agentKind, cwd]);
   // 内边距 + 终端底色：避免 xterm 内容贴边被面板边缘裁切
   return <div ref={ref} className="h-full w-full bg-[#1f1e1d] p-2" />;
 }
@@ -118,15 +119,22 @@ let termNo = 0;
 const nextTitle = () => `终端${++termNo}`;
 const titleFor = (p: Profile) =>
   p.agentKind === "shell" ? nextTitle() : `${nextTitle()} · ${p.label}`;
-const paramsFor = (p: Profile, id: string): TermParams => ({
+const paramsFor = (p: Profile, id: string, cwd: string): TermParams => ({
   termId: id,
   shell: p.shell,
   launchCmd: p.launchCmd,
   agentKind: p.agentKind,
+  cwd,
 });
 
-/** 终端区：一个 workspace 一个实例；终端 id / 布局键按 workspace 隔离。 */
-export default function TerminalDock({ workspaceId }: { workspaceId: string }) {
+/** 终端区：一个 workspace 一个实例；终端 id/布局键按 workspace 隔离，cwd=工作区文件夹。 */
+export default function TerminalDock({
+  workspaceId,
+  cwd,
+}: {
+  workspaceId: string;
+  cwd: string;
+}) {
   const apiRef = useRef<DockviewApi | null>(null);
   const layoutKey = `htybox.dock.layout.${workspaceId}`;
   const mkId = () =>
@@ -141,7 +149,7 @@ export default function TerminalDock({ workspaceId }: { workspaceId: string }) {
         id,
         component: "terminal",
         title: titleFor(profile),
-        params: paramsFor(profile, id),
+        params: paramsFor(profile, id, cwd),
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,14 +192,14 @@ export default function TerminalDock({ workspaceId }: { workspaceId: string }) {
           id: id1,
           component: "terminal",
           title: titleFor(DEFAULT_PROFILE),
-          params: paramsFor(DEFAULT_PROFILE, id1),
+          params: paramsFor(DEFAULT_PROFILE, id1, cwd),
         });
         const id2 = mkId();
         api.addPanel({
           id: id2,
           component: "terminal",
           title: titleFor(DEFAULT_PROFILE),
-          params: paramsFor(DEFAULT_PROFILE, id2),
+          params: paramsFor(DEFAULT_PROFILE, id2, cwd),
           position: { referencePanel: id1, direction: "right" },
         });
       }

@@ -25,6 +25,10 @@ export interface ProjectRef {
 export const listSkills = (projectDir?: string) =>
   invoke<Skill[]>("list_skills", { projectDir });
 
+/** 只取某工作区文件夹自己的 skill（<dir>/.claude/skills）。 */
+export const listProjectSkills = (projectDir: string) =>
+  invoke<Skill[]>("list_project_skills", { projectDir });
+
 export const listMemories = (slug: string) =>
   invoke<MemoryItem[]>("list_memories", { slug });
 

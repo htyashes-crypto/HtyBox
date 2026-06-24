@@ -27,6 +27,7 @@ export function ensureEngine(
   termId: string,
   shell?: string,
   launchCmd?: string,
+  cwd?: string,
 ): void {
   if (engines.has(termId)) return;
 
@@ -55,7 +56,7 @@ export function ensureEngine(
 
   invoke("create_terminal", {
     id: termId,
-    opts: { shell, cols: 80, rows: 24 },
+    opts: { shell, cwd, cols: 80, rows: 24 },
     onOutput,
   })
     .then(() => {

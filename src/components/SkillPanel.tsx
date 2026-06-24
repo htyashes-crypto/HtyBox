@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { listSkills, type Skill } from "../catalog";
+import { listProjectSkills, type Skill } from "../catalog";
 import SearchBox from "./ui/SearchBox";
 import { listen } from "@tauri-apps/api/event";
 
-const sourceLabel = (s: string) => (s.startsWith("plugin:") ? "plugin" : s);
-const sourceColor = (s: string) =>
-  s.startsWith("plugin:") ? "#4f7cc4" : s === "user" ? "#2fa35e" : "#c15f3c";
-
-export default function SkillPanel() {
+/** 只显示当前工作区文件夹自己的 skill（<dir>/.claude/skills）。 */
+export default function SkillPanel({ projectDir }: { projectDir: string }) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [q, setQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -16,7 +13,7 @@ export default function SkillPanel() {
     let un: (() => void) | undefined;
     let disposed = false;
     const reload = () =>
-      listSkills()
+      listProjectSkills(projectDir)
         .then(setSkills)
         .catch((e) => setErr(String(e)));
     reload();
@@ -28,7 +25,7 @@ export default function SkillPanel() {
       disposed = true;
       un?.();
     };
-  }, []);
+  }, [projectDir]);
 
   const list = useMemo(() => {
     const k = q.trim().toLowerCase();
@@ -43,15 +40,19 @@ export default function SkillPanel() {
   return (
     <div className="flex h-full flex-col bg-[#f4f3ee]">
       <div className="px-2.5 pt-1 pb-2">
-        <SearchBox value={q} onChange={setQ} placeholder="搜索 skill…" />
+        <SearchBox value={q} onChange={setQ} placeholder="搜索本工作区 skill…" />
       </div>
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2.5 pb-3">
         {err && (
           <div className="px-1 text-[11px] text-[#d6453e]">加载失败：{err}</div>
         )}
         {!err && list.length === 0 && (
-          <div className="px-1 pt-6 text-center text-[11px] text-[#a8a29a]">
-            无匹配 skill
+          <div className="px-1 pt-6 text-center text-[11px] leading-relaxed text-[#a8a29a]">
+            本工作区没有 skill
+            <br />
+            <span className="text-[10px]">
+              （放到 <code className="text-[#73726c]">.claude/skills/</code> 下）
+            </span>
           </div>
         )}
         {list.map((s) => (
@@ -68,19 +69,8 @@ export default function SkillPanel() {
             title={`${s.invoke}\n${s.description}`}
             className="cursor-grab rounded-lg border border-[#e5e2d9] bg-white px-3 py-2 transition-colors hover:border-[#d4a27f] hover:bg-[#fbfaf7] active:cursor-grabbing"
           >
-            <div className="flex items-center gap-2">
-              <span className="truncate text-[12.5px] font-semibold text-[#191919]">
-                {s.name}
-              </span>
-              <span
-                className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
-                style={{
-                  color: sourceColor(s.source),
-                  background: sourceColor(s.source) + "22",
-                }}
-              >
-                {sourceLabel(s.source)}
-              </span>
+            <div className="truncate text-[12.5px] font-semibold text-[#191919]">
+              {s.name}
             </div>
             <div className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-[#73726c]">
               {s.description}

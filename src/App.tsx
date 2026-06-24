@@ -2,119 +2,122 @@ import { useEffect, useState } from "react";
 import { Allotment } from "allotment";
 import Sidebar from "./components/Sidebar";
 import TerminalDock from "./components/TerminalDock";
+import Welcome, { type RecentFolder } from "./components/Welcome";
 import { disposeByPrefix } from "./components/terminalEngine";
 
 interface Workspace {
-  id: string;
-  name: string;
+  id: string; // = slug(path)，同时作为 memory 作用域 slug
+  name: string; // 文件夹名
+  path: string; // 文件夹绝对路径
 }
 
-const WS_KEY = "htybox.workspaces.v1";
+const RECENTS_KEY = "htybox.recents.v1";
 
-function loadWorkspaces(): { list: Workspace[]; activeId: string } {
+// 与后端 memory slug 算法一致：把 : \ / _ 全替换成 -
+const slugify = (p: string) => p.replace(/[:\\/_]/g, "-");
+const basename = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() || p;
+
+function loadRecents(): RecentFolder[] {
   try {
-    const raw = localStorage.getItem(WS_KEY);
-    if (raw) {
-      const d = JSON.parse(raw);
-      if (Array.isArray(d.list) && d.list.length)
-        return { list: d.list, activeId: d.activeId ?? d.list[0].id };
-    }
+    const r = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]");
+    if (Array.isArray(r)) return r;
   } catch {
     /* ignore */
   }
-  return {
-    list: [
-      { id: "ws-1", name: "workspace1" },
-      { id: "ws-2", name: "workspace2" },
-    ],
-    activeId: "ws-1",
-  };
+  return [];
 }
 
-let wsSeq = 100;
-const newWsId = () => `ws-${Date.now().toString(36)}-${(wsSeq++).toString(36)}`;
-
 export default function App() {
-  const [{ list: initList, activeId: initActive }] = useState(loadWorkspaces);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(initList);
-  const [activeId, setActiveId] = useState(initActive);
+  const [recents, setRecents] = useState<RecentFolder[]>(loadRecents);
+  const [openWs, setOpenWs] = useState<Workspace[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   // 已挂载过的 workspace（懒挂载 + 挂载后常驻 → 切走时 PTY 后台存活）
-  const [opened, setOpened] = useState<Set<string>>(() => new Set([initActive]));
-
-  useEffect(() => {
-    setOpened((s) => (s.has(activeId) ? s : new Set(s).add(activeId)));
-  }, [activeId]);
+  const [opened, setOpened] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     try {
-      localStorage.setItem(WS_KEY, JSON.stringify({ list: workspaces, activeId }));
+      localStorage.setItem(RECENTS_KEY, JSON.stringify(recents));
     } catch {
       /* ignore */
     }
-  }, [workspaces, activeId]);
+  }, [recents]);
 
-  const addWorkspace = () => {
-    const id = newWsId();
-    setWorkspaces((w) => [...w, { id, name: `workspace${w.length + 1}` }]);
+  const openFolder = (path: string) => {
+    const id = slugify(path);
+    const name = basename(path);
+    setOpenWs((ws) => (ws.some((w) => w.id === id) ? ws : [...ws, { id, name, path }]));
+    setOpened((s) => new Set(s).add(id));
     setActiveId(id);
+    setRecents((rs) => [{ name, path }, ...rs.filter((r) => r.path !== path)].slice(0, 12));
   };
 
-  const closeWorkspace = (id: string) => {
-    if (workspaces.length <= 1) return; // 至少留一个
+  const closeWs = (id: string) => {
     disposeByPrefix(id + "::"); // 结束该工作区全部终端
     try {
       localStorage.removeItem(`htybox.dock.layout.${id}`);
     } catch {
       /* ignore */
     }
-    const rest = workspaces.filter((x) => x.id !== id);
-    setWorkspaces(rest);
+    const rest = openWs.filter((w) => w.id !== id);
+    setOpenWs(rest);
     setOpened((s) => {
       const n = new Set(s);
       n.delete(id);
       return n;
     });
-    if (id === activeId) setActiveId(rest[0].id);
+    if (id === activeId) setActiveId(rest.length ? rest[rest.length - 1].id : null);
   };
+
+  const active = openWs.find((w) => w.id === activeId) ?? null;
+
+  // 无活动工作区 → 欢迎页（Cursor 式初始界面）
+  if (!active) {
+    return <Welcome recents={recents} onOpen={openFolder} />;
+  }
 
   return (
     <div className="flex h-screen w-screen flex-col bg-[#faf9f5] text-[#191919]">
-      {/* 顶部 workspace 标签栏 */}
+      {/* 顶部：品牌(回欢迎页) + 工作区标签 + 多 Agent */}
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] px-3">
-        <div className="h-4 w-4 rounded bg-[#d97757]" />
-        <span className="text-sm font-bold">HtyBox</span>
+        <button
+          onClick={() => setActiveId(null)}
+          title="返回欢迎页"
+          className="flex items-center gap-2"
+        >
+          <div className="h-4 w-4 rounded bg-[#d97757]" />
+          <span className="text-sm font-bold">HtyBox</span>
+        </button>
         <div className="ml-3 flex items-center gap-1.5">
-          {workspaces.map((ws) => {
-            const active = ws.id === activeId;
+          {openWs.map((w) => {
+            const isActive = w.id === activeId;
             return (
               <div
-                key={ws.id}
-                onClick={() => setActiveId(ws.id)}
+                key={w.id}
+                onClick={() => setActiveId(w.id)}
+                title={w.path}
                 className={
                   "group flex cursor-pointer items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors " +
-                  (active
+                  (isActive
                     ? "border border-[#e5e2d9] border-t-2 border-t-[#d97757] bg-white text-[#191919]"
                     : "border border-[#e5e2d9] text-[#73726c] hover:bg-white hover:text-[#191919]")
                 }
               >
-                <span>{ws.name}</span>
-                {workspaces.length > 1 && (
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      closeWorkspace(ws.id);
-                    }}
-                    className="ml-0.5 rounded text-[#a8a29a] opacity-0 transition-opacity hover:text-[#191919] group-hover:opacity-100"
-                  >
-                    ✕
-                  </span>
-                )}
+                <span className="max-w-[140px] truncate">{w.name}</span>
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeWs(w.id);
+                  }}
+                  className="ml-0.5 rounded text-[#a8a29a] opacity-0 transition-opacity hover:text-[#191919] group-hover:opacity-100"
+                >
+                  ✕
+                </span>
               </div>
             );
           })}
           <span
-            onClick={addWorkspace}
-            title="新建工作区"
+            onClick={() => setActiveId(null)}
+            title="打开/新建工作区"
             className="cursor-pointer rounded px-1.5 text-base text-[#73726c] hover:text-[#191919]"
           >
             +
@@ -125,24 +128,24 @@ export default function App() {
         </div>
       </div>
 
-      {/* 两栏：侧栏(Skill/Memory) | 终端区(按 workspace 隔离，切换保留后台) */}
+      {/* 两栏：侧栏(Skill/Memory，作用域=当前工作区) | 终端区(按工作区隔离，切换保留后台) */}
       <div className="min-h-0 flex-1">
         <Allotment proportionalLayout={false}>
           <Allotment.Pane minSize={220} preferredSize={300} snap>
-            <Sidebar />
+            <Sidebar workspacePath={active.path} workspaceSlug={active.id} />
           </Allotment.Pane>
           <Allotment.Pane minSize={400}>
             <div className="relative h-full w-full">
-              {workspaces
-                .filter((ws) => opened.has(ws.id))
-                .map((ws) => (
+              {openWs
+                .filter((w) => opened.has(w.id))
+                .map((w) => (
                   <div
-                    key={ws.id}
+                    key={w.id}
                     className={
-                      "absolute inset-0 " + (ws.id === activeId ? "" : "hidden")
+                      "absolute inset-0 " + (w.id === activeId ? "" : "hidden")
                     }
                   >
-                    <TerminalDock workspaceId={ws.id} />
+                    <TerminalDock workspaceId={w.id} cwd={w.path} />
                   </div>
                 ))}
             </div>
@@ -150,9 +153,12 @@ export default function App() {
         </Allotment>
       </div>
 
-      {/* 底部状态栏 */}
-      <div className="flex h-6 shrink-0 items-center border-t border-[#e5e2d9] bg-[#f4f3ee] px-3 text-[10px] text-[#8c8a82]">
-        {workspaces.length} 个工作区 · 切换保留后台终端 · 拖 skill/memory 到终端注入 · HtyBox v0.1
+      {/* 底部状态栏：当前工作区路径 */}
+      <div className="flex h-6 shrink-0 items-center gap-2 border-t border-[#e5e2d9] bg-[#f4f3ee] px-3 text-[10px] text-[#8c8a82]">
+        <span className="truncate font-mono">{active.path}</span>
+        <span className="ml-auto shrink-0">
+          {openWs.length} 个工作区 · HtyBox v0.1
+        </span>
       </div>
     </div>
   );

@@ -152,6 +152,20 @@ pub fn scan_skills(project_dir: Option<&str>) -> Vec<Skill> {
     out
 }
 
+/// 只扫某工作区文件夹自己的 `<dir>/.claude/skills`（用户/插件级 skill 留给未来单独界面）。
+pub fn scan_project_skills(project_dir: &str) -> Vec<Skill> {
+    let mut out = Vec::new();
+    if !project_dir.is_empty() {
+        scan_skill_dir(
+            &Path::new(project_dir).join(".claude").join("skills"),
+            "project",
+            &mut out,
+        );
+    }
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out
+}
+
 // ---------------- Memory ----------------
 
 fn projects_root() -> Option<PathBuf> {
