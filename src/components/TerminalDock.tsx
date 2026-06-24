@@ -22,6 +22,8 @@ import {
   type DragItem,
   type Profile,
 } from "../profiles";
+import claudeIcon from "../assets/claude.svg";
+import codexIcon from "../assets/codex.svg";
 
 type TermParams = {
   termId: string;
@@ -83,43 +85,15 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
   return <div ref={ref} className="h-full w-full bg-[#1f1e1d] p-2" />;
 }
 
-/** 工具栏图标：Claude=官方陶土星芒、Codex=官方深色 >_ 徽标、PowerShell=终端 >_。 */
+/** 工具栏图标：Claude / Codex 用 FanBox 仓库的官方 SVG 素材；PowerShell 用终端 >_。 */
 function ProfileIcon({ id }: { id: string }) {
   if (id === "claude")
     return (
-      <svg
-        className="h-4 w-4"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-      >
-        <path d="M12 3v18M6.71 19.28 17.29 4.72M3.44 14.78 20.56 9.22M20.56 14.78 3.44 9.22M17.29 19.28 6.71 4.72" />
-      </svg>
+      <img src={claudeIcon} alt="Claude" className="h-4 w-4" draggable={false} />
     );
   if (id === "codex")
     return (
-      <svg className="h-4 w-4" viewBox="0 0 24 24">
-        <rect x="2" y="3" width="20" height="18" rx="5" fill="#181818" />
-        <path
-          d="M7 9l3 3-3 3"
-          fill="none"
-          stroke="#e8e6df"
-          strokeWidth={1.8}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <line
-          x1="12.5"
-          y1="15.2"
-          x2="17"
-          y2="15.2"
-          stroke="#e8e6df"
-          strokeWidth={1.8}
-          strokeLinecap="round"
-        />
-      </svg>
+      <img src={codexIcon} alt="Codex" className="h-4 w-4" draggable={false} />
     );
   return (
     <svg
