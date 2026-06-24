@@ -180,7 +180,12 @@ export default function App() {
                   <div
                     key={w.id}
                     className={
-                      "absolute inset-0 " + (w.id === activeId ? "" : "hidden")
+                      // 不用 display:none(会让 xterm/WebGL 停渲染→恢复显示时空白)；
+                      // 非活动用 opacity-0+低层级保持渲染，活动的盖在最上层
+                      "absolute inset-0 " +
+                      (w.id === activeId
+                        ? "z-10"
+                        : "z-0 opacity-0 pointer-events-none")
                     }
                   >
                     <TerminalDock
