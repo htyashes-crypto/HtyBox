@@ -21,6 +21,8 @@ pub struct SpawnOptions {
     pub cwd: Option<String>,
     pub cols: u16,
     pub rows: u16,
+    /// per-terminal 环境变量（M7-A：注入 agent 身份 HTYBOX_MCP_TOKEN / HTYBOX_AGENT_ID 等）。
+    pub env: Option<HashMap<String, String>>,
 }
 
 struct PtySession {
@@ -63,6 +65,13 @@ impl PtyManager {
                 if let Some(home) = home_dir() {
                     cmd.cwd(home);
                 }
+            }
+        }
+
+        // per-terminal 环境变量（agent 身份）；继承父进程环境 + 叠加这些
+        if let Some(env) = opts.env {
+            for (k, v) in env {
+                cmd.env(k, v);
             }
         }
 

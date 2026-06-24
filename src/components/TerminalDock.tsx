@@ -27,12 +27,18 @@ import {
 } from "../profiles";
 import claudeIcon from "../assets/claude.svg";
 import codexIcon from "../assets/codex.svg";
+import {
+  setupMcpAgent,
+  registerAgentLauncher,
+  type AgentSpec,
+} from "../mcp";
 
 type TermParams = {
   termId: string;
   shell?: string;
   agentKind?: AgentKind;
   cwd?: string;
+  env?: Record<string, string>; // M7-A：agent 终端的身份环境变量(HTYBOX_MCP_TOKEN 等)
 };
 
 const DRAG_MIME = "application/x-htybox-item";
@@ -147,7 +153,7 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
 
 /** dockview 面板：挂终端引擎 + 自动命名 + 作为 skill/memory 拖拽落点。 */
 function DockTerminal(props: IDockviewPanelProps<TermParams>) {
-  const { termId, shell, agentKind = "shell", cwd } = props.params;
+  const { termId, shell, agentKind = "shell", cwd, env } = props.params;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const c = ref.current;
@@ -159,7 +165,7 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
       restored,
       restored ? SESSION_NAMES[termId] : undefined,
     );
-    ensureEngine(termId, shell, launch, cwd);
+    ensureEngine(termId, shell, launch, cwd, env);
     attachEngine(termId, c);
 
     // 程序设置终端标题(OSC)时：①同步到 Tab（被用户重命名的跳过）②记住会话名供复原
@@ -361,6 +367,53 @@ export default function TerminalDock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+
+  // M7-A：响应 App「多 Agent 协作」，在本工作区起 agent 终端（注册身份 + 注入 token env）
+  useEffect(() => {
+    return registerAgentLauncher(workspaceId, (specs: AgentSpec[]) => {
+      specs.forEach(async (spec) => {
+        const api = apiRef.current;
+        if (!api) return;
+        const token =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${(seq++).toString(36)}`;
+        try {
+          await setupMcpAgent({
+            cwd,
+            token,
+            agentId: spec.agentId,
+            role: spec.role,
+            roleName: spec.roleName,
+            workspace: workspaceId,
+          });
+        } catch (e) {
+          console.error("setup_mcp_agent failed", e);
+          return;
+        }
+        const id = mkId();
+        api.addPanel({
+          id,
+          component: "terminal",
+          title: spec.roleName,
+          params: {
+            termId: id,
+            shell: "powershell.exe",
+            agentKind: spec.agentKind,
+            cwd,
+            env: {
+              HTYBOX_MCP_TOKEN: token,
+              HTYBOX_AGENT_ID: spec.agentId,
+              HTYBOX_ROLE: spec.role,
+              HTYBOX_ROLE_NAME: spec.roleName,
+              HTYBOX_WORKSPACE_ID: workspaceId,
+            },
+          },
+        });
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId, cwd]);
 
   return (
     <div className="flex h-full w-full flex-col bg-[#1f1e1d]">

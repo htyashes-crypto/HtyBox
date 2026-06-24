@@ -5,6 +5,7 @@ import TerminalDock, { markWorkspaceClosing } from "./components/TerminalDock";
 import Welcome, { type RecentFolder } from "./components/Welcome";
 import SettingsModal from "./components/SettingsModal";
 import { disposeByPrefix } from "./components/terminalEngine";
+import { launchAgents } from "./mcp";
 
 function GearIcon() {
   return (
@@ -143,9 +144,19 @@ export default function App() {
             >
               <GearIcon />
             </button>
-            <div className="cursor-pointer rounded-md border border-[#e8c8bb] bg-[#d97757]/12 px-3 py-1 text-xs font-semibold text-[#c15f3c] transition-colors hover:bg-[#d97757]/20">
+            <button
+              onClick={() => {
+                if (!active) return;
+                launchAgents(active.id, [
+                  { agentId: "负责人", roleName: "负责人", role: "lead", agentKind: "claude" },
+                  { agentId: "维护员", roleName: "维护员", role: "worker", agentKind: "claude" },
+                ]);
+              }}
+              title="M7-A 测试：在本工作区起 负责人+维护员 两个 claude agent（接入 MCP broker）"
+              className="cursor-pointer rounded-md border border-[#e8c8bb] bg-[#d97757]/12 px-3 py-1 text-xs font-semibold text-[#c15f3c] transition-colors hover:bg-[#d97757]/20"
+            >
               多 Agent 协作
-            </div>
+            </button>
           </div>
         </div>
       )}
