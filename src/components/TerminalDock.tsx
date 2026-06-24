@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   DockviewReact,
@@ -83,6 +83,37 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
   return <div ref={ref} className="h-full w-full bg-[#1f1e1d] p-2" />;
 }
 
+/** 工具栏图标：按 profile 给对应小图标（颜色由按钮 currentColor 决定）。 */
+function ProfileIcon({ id }: { id: string }) {
+  const common = {
+    className: "h-4 w-4",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  if (id === "claude")
+    return (
+      <svg {...common}>
+        <path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4" />
+      </svg>
+    );
+  if (id === "codex")
+    return (
+      <svg {...common}>
+        <polygon points="12 2 21 7 21 17 12 22 3 17 3 7" />
+      </svg>
+    );
+  return (
+    <svg {...common}>
+      <polyline points="4 7 9 12 4 17" />
+      <line x1="11" y1="17" x2="19" y2="17" />
+    </svg>
+  );
+}
+
 const components = { terminal: DockTerminal };
 
 let seq = 0;
@@ -102,7 +133,6 @@ const paramsFor = (p: Profile, id: string): TermParams => ({
 
 export default function TerminalDock() {
   const apiRef = useRef<DockviewApi | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const addTerminal = useCallback((profile: Profile) => {
     const api = apiRef.current;
@@ -166,41 +196,20 @@ export default function TerminalDock() {
 
   return (
     <div className="flex h-full w-full flex-col bg-[#1f1e1d]">
-      <div className="relative flex shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] px-3 py-1.5">
-        <button
-          onClick={() => setMenuOpen((o) => !o)}
-          className="flex items-center gap-1 rounded-md border border-[#e5e2d9] bg-white px-2 py-1 text-xs text-[#3d3d3a] transition-colors hover:border-[#d4a27f] hover:text-[#191919]"
-        >
-          ＋ 新建终端 <span className="text-[8px] text-[#8c8a82]">▼</span>
-        </button>
-        {menuOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-10"
-              onClick={() => setMenuOpen(false)}
-            />
-            <div className="absolute top-9 left-3 z-20 w-44 overflow-hidden rounded-lg border border-[#e5e2d9] bg-white py-1 shadow-lg">
-              {PROFILES.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    addTerminal(p);
-                    setMenuOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[#3d3d3a] hover:bg-[#f4f3ee]"
-                >
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ background: p.dotColor }}
-                  />
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-        <span className="text-[10px] text-[#8c8a82]">
-          拖标签到边缘可分屏 · 拖动可重排 · 拖 skill/memory 到终端注入(Shift=直接发送)
+      <div className="flex shrink-0 items-center gap-0.5 border-b border-[#e5e2d9] bg-[#f4f3ee] px-2 py-1.5">
+        {PROFILES.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => addTerminal(p)}
+            title={`新建 ${p.label} 终端`}
+            style={{ color: p.dotColor }}
+            className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-white"
+          >
+            <ProfileIcon id={p.id} />
+          </button>
+        ))}
+        <span className="ml-2 text-[10px] text-[#8c8a82]">
+          点图标新建对应终端 · 拖标签分屏/重排 · 拖 skill/memory 注入(Shift 直接发送)
         </span>
       </div>
       <div className="dockview-theme-light min-h-0 flex-1">
