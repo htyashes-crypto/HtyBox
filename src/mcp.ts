@@ -7,6 +7,8 @@ export interface AgentSpec {
   roleName: string;
   role: AgentRole;
   agentKind: "claude" | "codex";
+  model?: string; // 模型(--model)，空/缺省用 CLI 默认
+  responsibility?: string; // 职责(自由文本)，注入 env(HTYBOX_RESPONSIBILITY) 供 M7-C 协议注入
 }
 
 /** broker 端点 URL（agent 的 .mcp.json 指向它）。 */

@@ -40,6 +40,7 @@ type TermParams = {
   agentKind?: AgentKind;
   cwd?: string;
   env?: Record<string, string>; // M7-A：agent 终端的身份环境变量(HTYBOX_MCP_TOKEN 等)
+  model?: string; // M7-G：团队成员的模型，新建时拼进 --model
 };
 
 const DRAG_MIME = "application/x-htybox-item";
@@ -182,6 +183,7 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
       agentKind,
       restored,
       restored ? SESSION_NAMES[termId] : undefined,
+      props.params.model, // 团队成员新建时带 --model
     );
     ensureEngine(termId, shell, launch, cwd, env, agentKind);
     attachEngine(termId, c);
@@ -453,12 +455,14 @@ export default function TerminalDock({
             shell: "powershell.exe",
             agentKind: spec.agentKind,
             cwd,
+            model: spec.model, // 新建时拼进 --model
             env: {
               HTYBOX_MCP_TOKEN: token,
               HTYBOX_AGENT_ID: spec.agentId,
               HTYBOX_ROLE: spec.role,
               HTYBOX_ROLE_NAME: spec.roleName,
               HTYBOX_WORKSPACE_ID: workspaceId,
+              HTYBOX_RESPONSIBILITY: spec.responsibility ?? "", // 职责，供 M7-C 协议注入
             },
           },
           position: prevId

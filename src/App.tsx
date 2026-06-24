@@ -4,8 +4,9 @@ import Sidebar from "./components/Sidebar";
 import TerminalDock, { markWorkspaceClosing } from "./components/TerminalDock";
 import Welcome, { type RecentFolder } from "./components/Welcome";
 import SettingsModal from "./components/SettingsModal";
+import CollabModal from "./components/CollabModal";
 import { disposeByPrefix } from "./components/terminalEngine";
-import { launchAgents } from "./mcp";
+import { launchAgents, type AgentSpec } from "./mcp";
 
 function GearIcon() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
   const [openWs, setOpenWs] = useState<Workspace[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showCollab, setShowCollab] = useState(false);
   // 已挂载过的 workspace（懒挂载 + 挂载后常驻 → 切走/回欢迎页时 PTY 后台存活）
   const [opened, setOpened] = useState<Set<string>>(new Set());
 
@@ -145,14 +147,8 @@ export default function App() {
               <GearIcon />
             </button>
             <button
-              onClick={() => {
-                if (!active) return;
-                launchAgents(active.id, [
-                  { agentId: "负责人", roleName: "负责人", role: "lead", agentKind: "claude" },
-                  { agentId: "维护员", roleName: "维护员", role: "worker", agentKind: "codex" },
-                ]);
-              }}
-              title="M7-A 测试：在本工作区起 负责人+维护员 两个 claude agent（接入 MCP broker）"
+              onClick={() => setShowCollab(true)}
+              title="多 Agent 协作：团队库 / 配置 / 一键开启"
               className="cursor-pointer rounded-md border border-[#e8c8bb] bg-[#d97757]/12 px-3 py-1 text-xs font-semibold text-[#c15f3c] transition-colors hover:bg-[#d97757]/20"
             >
               多 Agent 协作
@@ -219,6 +215,17 @@ export default function App() {
 
       {/* 全局设置弹窗（盖在最上层） */}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+      {/* 多 Agent 协作：团队库 + 一键开启（在当前工作区起整支团队） */}
+      {showCollab && (
+        <CollabModal
+          canLaunch={!!active}
+          onClose={() => setShowCollab(false)}
+          onLaunch={(specs: AgentSpec[]) => {
+            if (active) launchAgents(active.id, specs);
+          }}
+        />
+      )}
     </div>
   );
 }
