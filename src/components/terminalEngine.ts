@@ -1,5 +1,6 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 
@@ -38,18 +39,14 @@ const engines = new Map<string, Engine>();
 
 /**
  * 把粘贴文本规范化换行 + 成对 bracketed-paste 包裹，让 claude/codex 折叠成 [Pasted text +N lines]。
- * 两家计行用的换行符不同(实测)：claude 按 \r、codex 按 \n；发错就数不出行数 → 不折叠。
+ * 强制包裹(不赌可能被 ConPTY 吞掉的 ?2004h)，换行统一 \n —— claude/codex 的 TUI 均按 \n 计行
+ * (codex 实测 \n 折叠；claude 原生 Alt+V 内部也用 \n)。普通 shell 不包裹、换行转 \r 当逐行回车。
  */
 function pasteData(agentKind: string | undefined, raw: string): string {
-  if (agentKind === "claude") {
-    const t = raw.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
-    return `\x1b[200~${t}\x1b[201~`;
-  }
-  if (agentKind === "codex") {
+  if (agentKind === "claude" || agentKind === "codex") {
     const t = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     return `\x1b[200~${t}\x1b[201~`;
   }
-  // 普通 shell：换行规范成 \r 当作逐行回车输入（不包裹 bracketed）
   return raw.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
 }
 
@@ -69,6 +66,8 @@ export function ensureEngine(
   el.style.height = "100%";
 
   const term = new Terminal({
+    allowProposedApi: true, // Unicode11Addon 需要
+    convertEol: false,
     fontFamily: '"Cascadia Code", "Consolas", monospace',
     fontSize: 13,
     cursorBlink: true,
@@ -79,9 +78,18 @@ export function ensureEngine(
       cursor: "#d97757",
       selectionBackground: "#3a3631",
     },
+    // Windows=ConPTY：必须显式告知 xterm（VS Code 同款）。ConPTY 不透传转义序列、自己整屏重绘；
+    // 关键：buildNumber<21376 的旧 ConPTY 不支持 reflow，此时 xterm 必须【禁用自身 reflow】，否则
+    // resize 时 xterm 重排行 + ConPTY 整屏重绘【双重处理】→ 行错位/重复/叠影（claude 退出 resume
+    // 选择器整屏重绘时最明显）。buildNumber 暂硬编码当前系统(Win10 19045)，待加 Rust 动态获取以
+    // 适配 Win11(>=21376 时 ConPTY 支持 reflow、xterm 不禁用)。
+    windowsPty: navigator.userAgent.includes("Windows")
+      ? { backend: "conpty", buildNumber: 19045 }
+      : undefined,
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  term.loadAddon(new Unicode11Addon()); // 现代 Unicode 宽度表（默认 V6 算错宽字符宽度→列错位叠影）
 
   // 程序通过 OSC 设标题时回调（Tab 自动命名）
   term.onTitleChange((title) => engines.get(termId)?.onTitle?.(title));
@@ -90,9 +98,25 @@ export function ensureEngine(
     invoke("write_terminal", { id: termId, data }).catch(() => {}),
   );
 
-  // 复制：Ctrl+C 有选区则复制并清选区，无选区放行(=SIGINT)。粘贴不在 keydown 处理（见下方 paste 事件）。
+  // 复制粘贴：
+  // · Ctrl+V → 用 navigator.clipboard 读剪贴板(本 WebView 实测可用；paste 事件的 clipboardData
+  //   在 WebView2 读不到，故不用)，按 agent 规范化换行 + bracketed 包裹后注入。
+  // · Ctrl+C → 有选区复制并清选区，无选区放行(=SIGINT)。
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== "keydown" || !e.ctrlKey || e.altKey) return true;
+    if (e.key === "v" || e.key === "V") {
+      navigator.clipboard
+        ?.readText()
+        .then((raw) => {
+          if (raw)
+            invoke("write_terminal", {
+              id: termId,
+              data: pasteData(agentKind, raw),
+            }).catch(() => {});
+        })
+        .catch(() => {});
+      return false;
+    }
     if ((e.key === "c" || e.key === "C") && !e.shiftKey) {
       const sel = term.getSelection();
       if (sel) {
@@ -104,20 +128,13 @@ export function ensureEngine(
     return true;
   });
 
-  // 粘贴：只走标准 paste 事件。capture 阶段在 host 上拦截 → preventDefault+stopPropagation，
-  // 让 xterm 自带的 paste 监听器(在内部 textarea 上)收不到 → 杜绝"Ctrl+V 粘两遍"。
-  // clipboardData 同步可读，无需 navigator.clipboard 权限。
+  // 吞掉 WebView 原生 paste 事件：上面 Ctrl+V 已自己读剪贴板注入，这里 preventDefault 阻止
+  // xterm 再用自带 paste 逻辑粘一遍 → 杜绝"Ctrl+V 粘两遍"。
   el.addEventListener(
     "paste",
     (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      const raw = ev.clipboardData?.getData("text") ?? "";
-      if (!raw) return;
-      invoke("write_terminal", {
-        id: termId,
-        data: pasteData(agentKind, raw),
-      }).catch(() => {});
     },
     true,
   );
@@ -202,6 +219,12 @@ function doFit(termId: string): void {
   if (!e.opened) {
     e.term.open(e.el);
     e.opened = true;
+    // 激活 Unicode 11 宽度表（须在 open 后）：与 claude/ConPTY 的宽字符列计算对齐，避免列错位
+    try {
+      e.term.unicode.activeVersion = "11";
+    } catch {
+      /* ignore */
+    }
     e.term.focus();
   }
   try {
