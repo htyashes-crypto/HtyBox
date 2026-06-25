@@ -9,8 +9,9 @@
 //! - POST *通知/响应*（无 id）→ 回 202；
 //! - GET → 回 405（声明本端点不提供服务端 SSE 流；M7-A 唤醒走 PTY 注入，不靠 MCP 推送）。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -49,6 +50,15 @@ struct Task {
     summary: String,    // report_result 回填
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LogEntry {
+    seq: u64,
+    agent_id: String,
+    role_name: String,
+    tool: String, // 工具名（统一工具调用流，仪表盘展示）
+}
+
 #[derive(Default)]
 struct Store {
     by_token: HashMap<String, AgentInfo>, // token -> 身份
@@ -58,6 +68,7 @@ struct Store {
     shared: HashMap<String, String>,       // 黑板（read_shared/write_shared，含总目标）
     last_to: HashMap<String, (u64, u32)>,  // 目标 agentId -> (上条内容哈希, 连续重复次数)：死循环检测
     claims: HashMap<String, String>,       // 归一化文件路径 -> 占用者 agentId（文件归属登记/冲突防护）
+    log: VecDeque<LogEntry>,               // 工具调用流环形缓冲（仪表盘/运行面板）
     seq: u64,
 }
 
@@ -65,11 +76,43 @@ pub struct Broker {
     port: u16,
     store: Mutex<Store>,
     app: Mutex<Option<AppHandle>>, // setup 后注入，用于 emit "agent-wake"（半自动唤醒）
+    started: Instant,              // 启动时刻（uptime）
 }
 
 impl Broker {
     pub fn port(&self) -> u16 {
         self.port
+    }
+
+    /// 宿主 UI(运行面板/仪表盘)读取协作状态快照（免 token，读自己的 broker）。
+    pub fn snapshot(&self) -> Value {
+        let s = self.store.lock().unwrap();
+        let agents: Vec<Value> = s
+            .by_token
+            .values()
+            .map(|i| {
+                json!({
+                    "agentId": i.agent_id, "role": i.role, "roleName": i.role_name,
+                    "workspace": i.workspace,
+                    "state": s.state.get(&i.agent_id).cloned().unwrap_or_else(|| "working".to_string()),
+                })
+            })
+            .collect();
+        let claims: Vec<Value> = s
+            .claims
+            .iter()
+            .map(|(p, o)| json!({ "path": p, "owner": o }))
+            .collect();
+        let log: Vec<&LogEntry> = s.log.iter().collect();
+        json!({
+            "port": self.port,
+            "uptimeSecs": self.started.elapsed().as_secs(),
+            "agents": agents,
+            "tasks": s.tasks,
+            "claims": claims,
+            "shared": s.shared,
+            "log": log,
+        })
     }
 
     /// 注册一个 agent（开启团队/新建 agent 终端前调用）：token -> 身份。
@@ -170,6 +213,18 @@ impl Broker {
         args: &Value,
     ) -> Result<Value, (i64, String)> {
         let mut s = self.store.lock().unwrap();
+        // 记录工具调用流（环形缓冲，供运行面板/仪表盘统一时间线）
+        s.seq += 1;
+        let lseq = s.seq;
+        if s.log.len() >= 200 {
+            s.log.pop_front();
+        }
+        s.log.push_back(LogEntry {
+            seq: lseq,
+            agent_id: caller.agent_id.clone(),
+            role_name: caller.role_name.clone(),
+            tool: name.to_string(),
+        });
         match name {
             "whoami" => Ok(serde_json::to_value(caller).unwrap_or_else(|_| json!({}))),
             "list_agents" => {
@@ -590,6 +645,7 @@ pub fn start() -> Arc<Broker> {
         port,
         store: Mutex::new(Store::default()),
         app: Mutex::new(None),
+        started: Instant::now(),
     });
     let b = broker.clone();
     std::thread::spawn(move || {

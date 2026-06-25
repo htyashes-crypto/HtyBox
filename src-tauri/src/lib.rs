@@ -70,6 +70,12 @@ fn mcp_broker_url(state: State<'_, AppState>) -> String {
     format!("http://127.0.0.1:{}/mcp", state.broker.port())
 }
 
+/// M7-F：宿主 UI(运行面板/仪表盘)读取协作状态快照（花名册/任务/归属/黑板/工具流）。
+#[tauri::command]
+fn broker_snapshot(state: State<'_, AppState>) -> serde_json::Value {
+    state.broker.snapshot()
+}
+
 /// 把 htybox 这个 MCP server **合并**进 `<cwd>/.mcp.json`（保留用户已有的 server，如 unity-mcp）。
 /// 用 `${HTYBOX_MCP_TOKEN}` 占位，token 由每个终端进程的环境变量提供 → 一份配置可区分多 agent。
 fn write_mcp_json(cwd: &str, url: &str) -> Result<(), String> {
@@ -197,7 +203,8 @@ pub fn run() {
             list_projects,
             mcp_broker_url,
             setup_mcp_agent,
-            write_agent_brief
+            write_agent_brief,
+            broker_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -11,6 +11,7 @@ import {
 } from "../teams";
 import type { AgentSpec } from "../mcp";
 import TeamEditor from "./TeamEditor";
+import RunPanel from "./RunPanel";
 
 /** Team → 启动规格（一键开启时交给 launchAgents）。 */
 function teamToSpecs(team: Team): AgentSpec[] {
@@ -45,6 +46,7 @@ export default function CollabModal({
     return s;
   });
   const [editing, setEditing] = useState<Team | null>(null);
+  const [tab, setTab] = useState<"library" | "run">("library");
   const [msg, setMsg] = useState("");
 
   const persist = (next: Team[]) => {
@@ -99,15 +101,33 @@ export default function CollabModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] px-4 py-3">
-          <span className="text-sm font-bold text-[#191919]">多 Agent 协作 · 团队库</span>
+          <span className="text-sm font-bold text-[#191919]">多 Agent 协作</span>
+          <div className="ml-2 flex gap-1">
+            {(["library", "run"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={
+                  "rounded-md px-2.5 py-1 text-xs transition-colors " +
+                  (tab === t
+                    ? "bg-white font-semibold text-[#191919] shadow-sm"
+                    : "text-[#73726c] hover:text-[#191919]")
+                }
+              >
+                {t === "library" ? "团队库" : "运行面板"}
+              </button>
+            ))}
+          </div>
           {msg && <span className="text-xs text-[#c15f3c]">{msg}</span>}
           <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => setEditing(emptyTeam())}
-              className="rounded-md bg-[#d97757] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#c15f3c]"
-            >
-              + 新建团队
-            </button>
+            {tab === "library" && (
+              <button
+                onClick={() => setEditing(emptyTeam())}
+                className="rounded-md bg-[#d97757] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#c15f3c]"
+              >
+                + 新建团队
+              </button>
+            )}
             <button
               onClick={onClose}
               className="flex h-7 w-7 items-center justify-center rounded-md text-[#73726c] hover:bg-white hover:text-[#191919]"
@@ -117,7 +137,11 @@ export default function CollabModal({
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto p-4">
+        {tab === "run" ? (
+          <RunPanel />
+        ) : (
+          <>
+            <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto p-4">
           {teams.map((t) => (
             <div key={t.id} className="flex flex-col rounded-lg border border-[#e5e2d9] bg-white p-3">
               <div className="truncate text-sm font-semibold text-[#191919]">{t.name || "未命名团队"}</div>
@@ -192,6 +216,8 @@ export default function CollabModal({
             </button>
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

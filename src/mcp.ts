@@ -15,6 +15,34 @@ export interface AgentSpec {
 /** broker 端点 URL（agent 的 .mcp.json 指向它）。 */
 export const mcpBrokerUrl = () => invoke<string>("mcp_broker_url");
 
+// ---- M7-F：协作状态快照（运行面板/仪表盘轮询）----
+export interface SnapshotAgent {
+  agentId: string;
+  role: string;
+  roleName: string;
+  workspace: string;
+  state: string; // working | idle | pending | waiting
+}
+export interface SnapshotTask {
+  id: string;
+  assigner: string;
+  worker: string;
+  task: string;
+  fileScope: string;
+  status: string;
+  summary: string;
+}
+export interface BrokerSnapshot {
+  port: number;
+  uptimeSecs: number;
+  agents: SnapshotAgent[];
+  tasks: SnapshotTask[];
+  claims: { path: string; owner: string }[];
+  shared: Record<string, string>;
+  log: { seq: number; agentId: string; roleName: string; tool: string }[];
+}
+export const brokerSnapshot = () => invoke<BrokerSnapshot>("broker_snapshot");
+
 /** 注册一个 agent（token→身份）并把 htybox 合并进该 cwd 的 .mcp.json。 */
 export const setupMcpAgent = (args: {
   cwd: string;
