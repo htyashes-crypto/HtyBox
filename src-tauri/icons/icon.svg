@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#F4EDE1"/>
+
+  <!-- fills -->
+  <g>
+    <polygon points="512,565 800,400 800,690 512,855" fill="#BD6843"/>
+    <polygon points="224,400 512,565 512,855 224,690" fill="#D67E54"/>
+    <polygon points="512,235 800,400 512,565 224,400" fill="#CD7249"/>
+    <polygon points="224,400 512,235 372,180 84,345" fill="#F1E9D9"/>
+    <polygon points="512,235 800,400 940,345 652,180" fill="#F1E9D9"/>
+  </g>
+
+  <!-- hty on left face -->
+  <g transform="matrix(0.8677,0.4971,0,1,382.0,607.5)">
+    <text x="5.00" y="22.00" font-family="Great Vibes" font-size="238" fill="#1F140E" stroke="#1F140E" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text><text x="4.50" y="19.40" font-family="Great Vibes" font-size="238" fill="#1F140E" stroke="#1F140E" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text><text x="4.00" y="16.80" font-family="Great Vibes" font-size="238" fill="#1F140E" stroke="#1F140E" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text><text x="3.50" y="14.20" font-family="Great Vibes" font-size="238" fill="#1F140E" stroke="#1F140E" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text><text x="3.00" y="11.60" font-family="Great Vibes" font-size="238" fill="#1F140E" stroke="#1F140E" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text><text x="2.50" y="9.00" font-family="Great Vibes" font-size="238" fill="#1F140E" stroke="#1F140E" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text><text x="2.00" y="6.40" font-family="Great Vibes" font-size="238" fill="#1F140E" stroke="#1F140E" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text><text x="1.50" y="3.80" font-family="Great Vibes" font-size="238" fill="#1F140E" stroke="#1F140E" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text><text x="1.00" y="1.20" font-family="Great Vibes" font-size="238" fill="#1F140E" stroke="#1F140E" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text><text x="0.50" y="-1.40" font-family="Great Vibes" font-size="238" fill="#1F140E" stroke="#1F140E" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text>
+    <text x="0.00" y="-4.00" font-family="Great Vibes" font-size="238" fill="#37271C" stroke="#37271C" stroke-width="3.81" stroke-linejoin="round" text-anchor="middle" dominant-baseline="middle">hty</text>
+  </g>
+
+  <!-- strokes -->
+  <g fill="none" stroke="#2B221C" stroke-width="24" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="512,565 800,400 800,690 512,855"/>
+    <polygon points="224,400 512,565 512,855 224,690"/>
+    <polygon points="512,235 800,400 512,565 224,400"/>
+    <polygon points="224,400 512,235 372,180 84,345"/>
+    <polygon points="512,235 800,400 940,345 652,180"/>
+    <line x1="512" y1="565" x2="512" y2="855"/>
+    <line x1="512" y1="235" x2="512" y2="565"/>
+  </g>
+</svg>

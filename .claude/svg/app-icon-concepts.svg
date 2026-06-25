@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1044 600" font-family="Segoe UI, Microsoft YaHei, PingFang SC, sans-serif">
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cdc7ba"/>
+      <stop offset="1" stop-color="#b6b0a1"/>
+    </linearGradient>
+    <clipPath id="tile"><rect width="160" height="160" rx="36"/></clipPath>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#3a2f28" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <!-- page -->
+  <rect width="1044" height="600" fill="url(#page)"/>
+
+  <!-- header -->
+  <text x="50" y="50" font-size="30" font-weight="700" fill="#221f1a">HtyBox · 应用图标方案</text>
+  <text x="50" y="78" font-size="15" fill="#4d493f">10 个「盒」诠释 · 奶油 + 陶土品牌色 · 由你定最终图标</text>
+
+  <!-- keyword chips -->
+  <g font-size="13" font-weight="600" text-anchor="middle">
+    <g transform="translate(560,38)">
+      <rect width="58" height="24" rx="12" fill="#faf9f5" stroke="#d97757" stroke-width="1.5"/>
+      <text x="29" y="16" fill="#b85a3d">简洁</text>
+    </g>
+    <g transform="translate(626,38)">
+      <rect width="58" height="24" rx="12" fill="#faf9f5" stroke="#d97757" stroke-width="1.5"/>
+      <text x="29" y="16" fill="#b85a3d">大气</text>
+    </g>
+    <g transform="translate(692,38)">
+      <rect width="58" height="24" rx="12" fill="#faf9f5" stroke="#d97757" stroke-width="1.5"/>
+      <text x="29" y="16" fill="#b85a3d">规则</text>
+    </g>
+    <g transform="translate(758,38)">
+      <rect width="58" height="24" rx="12" fill="#faf9f5" stroke="#d97757" stroke-width="1.5"/>
+      <text x="29" y="16" fill="#b85a3d">柔和</text>
+    </g>
+    <g transform="translate(824,38)">
+      <rect width="58" height="24" rx="12" fill="#faf9f5" stroke="#d97757" stroke-width="1.5"/>
+      <text x="29" y="16" fill="#b85a3d">Box</text>
+    </g>
+  </g>
+
+  <!-- palette swatches -->
+  <g transform="translate(908,30)">
+    <rect x="0"   y="0" width="22" height="22" rx="5" fill="#d97757"/>
+    <rect x="26"  y="0" width="22" height="22" rx="5" fill="#faf9f5" stroke="#0000001a"/>
+    <rect x="52"  y="0" width="22" height="22" rx="5" fill="#e5e2d9"/>
+    <rect x="78"  y="0" width="22" height="22" rx="5" fill="#1f1e1d"/>
+    <rect x="104" y="0" width="22" height="22" rx="5" fill="#d4a27f"/>
+  </g>
+
+  <!-- ROW 0 -->
+  <!-- 1 等距开盖盒 -->
+  <g transform="translate(50,110)">
+    <rect width="160" height="160" rx="36" fill="#d97757" filter="url(#soft)"/>
+    <g clip-path="url(#tile)">
+      <path d="M40 83 L80 60 L120 83 L80 106 Z" fill="#d8cfbe"/>
+      <path d="M40 83 L80 106 L80 144 L40 121 Z" fill="#faf9f5"/>
+      <path d="M80 106 L120 83 L120 121 L80 144 Z" fill="#e7e0d2"/>
+      <path d="M40 83 L80 60 L120 83 L80 106 Z M40 83 L40 121 L80 144 L120 121 L120 83 M80 106 L80 144" fill="none" stroke="#b85a3d" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+    </g>
+    <text x="80" y="190" text-anchor="middle" font-size="14" font-weight="600" fill="#2a2722">① 等距开盖盒</text>
+  </g>
+
+  <!-- 2 立体三面体 -->
+  <g transform="translate(246,110)">
+    <rect width="160" height="160" rx="36" fill="#faf9f5" filter="url(#soft)"/>
+    <g clip-path="url(#tile)">
+      <path d="M80 50 L121.6 74 L80 98 L38.4 74 Z" fill="#ec9b7f"/>
+      <path d="M38.4 74 L80 98 L80 144 L38.4 120 Z" fill="#d97757"/>
+      <path d="M80 98 L121.6 74 L121.6 120 L80 144 Z" fill="#b85a3d"/>
+      <path d="M80 50 L121.6 74 L121.6 120 L80 144 L38.4 120 L38.4 74 Z M38.4 74 L80 98 L121.6 74 M80 98 L80 144" fill="none" stroke="#a8492b" stroke-width="2.2" stroke-linejoin="round"/>
+    </g>
+    <text x="80" y="190" text-anchor="middle" font-size="14" font-weight="600" fill="#2a2722">② 立体三面体</text>
+  </g>
+
+  <!-- 3 三栏内构 -->
+  <g transform="translate(442,110)">
+    <rect width="160" height="160" rx="36" fill="#1f1e1d" filter="url(#soft)"/>
+    <g clip-path="url(#tile)">
+      <rect x="36" y="42" width="88" height="92" rx="16" fill="#26241f" stroke="#faf9f5" stroke-width="3.2"/>
+      <rect x="50" y="58" width="16" height="60" rx="6" fill="#d97757"/>
+      <rect x="72" y="58" width="16" height="60" rx="6" fill="#f4f3ee"/>
+      <rect x="94" y="58" width="16" height="60" rx="6" fill="#d4a27f"/>
+    </g>
+    <text x="80" y="190" text-anchor="middle" font-size="14" font-weight="600" fill="#2a2722">③ 三栏内构</text>
+  </g>
+
+  <!-- 4 叠层抽屉 -->
+  <g transform="translate(638,110)">
+    <rect width="160" height="160" rx="36" fill="#faf9f5" filter="url(#soft)"/>
+    <g clip-path="url(#tile)">
+      <path d="M42 52 L54 42 L130 42 L118 52 Z" fill="#f2c3aa"/>
+      <rect x="42" y="52" width="76" height="26" rx="9" fill="#e89a78"/>
+      <path d="M42 76 L54 66 L130 66 L118 76 Z" fill="#e8a07f"/>
+      <rect x="42" y="76" width="76" height="26" rx="9" fill="#d97757"/>
+      <path d="M42 100 L54 90 L130 90 L118 100 Z" fill="#d97757"/>
+      <rect x="42" y="100" width="76" height="26" rx="9" fill="#c1633f"/>
+    </g>
+    <text x="80" y="190" text-anchor="middle" font-size="14" font-weight="600" fill="#2a2722">④ 叠层抽屉</text>
+  </g>
+
+  <!-- 5 线框立方 -->
+  <g transform="translate(834,110)">
+    <rect width="160" height="160" rx="36" fill="#faf9f5" filter="url(#soft)"/>
+    <g clip-path="url(#tile)">
+      <path d="M80 42 L118.1 64 L118.1 108 L80 130 L41.9 108 L41.9 64 Z" fill="none" stroke="#d97757" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M80 86 L80 42 M80 86 L118.1 108 M80 86 L41.9 108" fill="none" stroke="#d97757" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="80" y="190" text-anchor="middle" font-size="14" font-weight="600" fill="#2a2722">⑤ 线框立方</text>
+  </g>
+
+  <!-- ROW 1 -->
+  <!-- 6 盒中终端 -->
+  <g transform="translate(50,344)">
+    <rect width="160" height="160" rx="36" fill="#1f1e1d" filter="url(#soft)"/>
+    <g clip-path="url(#tile)">
+      <rect x="34" y="54" width="92" height="78" rx="16" fill="#faf9f5"/>
+      <circle cx="48" cy="68" r="3.4" fill="#d97757"/>
+      <circle cx="60" cy="68" r="3.4" fill="#d4a27f"/>
+      <circle cx="72" cy="68" r="3.4" fill="#c9c2b2"/>
+      <line x1="34" y1="78" x2="126" y2="78" stroke="#e5e2d9" stroke-width="1.5"/>
+      <path d="M50 96 L62 106 L50 116" fill="none" stroke="#d97757" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="70" y="108" width="26" height="8" rx="3" fill="#d97757"/>
+    </g>
+    <text x="80" y="190" text-anchor="middle" font-size="14" font-weight="600" fill="#2a2722">⑥ 盒中终端</text>
+  </g>
+
+  <!-- 7 俯视折翼 -->
+  <g transform="translate(246,344)">
+    <rect width="160" height="160" rx="36" fill="#d97757" filter="url(#soft)"/>
+    <g clip-path="url(#tile)">
+      <rect x="58" y="64" width="44" height="44" rx="3" fill="#b85a3d"/>
+      <path d="M58 64 L102 64 L112 44 L48 44 Z" fill="#faf9f5" stroke="#a8492b" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M58 108 L102 108 L112 128 L48 128 Z" fill="#ece6da" stroke="#a8492b" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M58 64 L58 108 L38 118 L38 54 Z" fill="#f3ede1" stroke="#a8492b" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M102 64 L102 108 L122 118 L122 54 Z" fill="#f3ede1" stroke="#a8492b" stroke-width="1.8" stroke-linejoin="round"/>
+    </g>
+    <text x="80" y="190" text-anchor="middle" font-size="14" font-weight="600" fill="#2a2722">⑦ 俯视折翼</text>
+  </g>
+
+  <!-- 8 H 字盒 -->
+  <g transform="translate(442,344)">
+    <rect width="160" height="160" rx="36" fill="#faf9f5" filter="url(#soft)"/>
+    <g clip-path="url(#tile)">
+      <rect x="34" y="40" width="92" height="92" rx="26" fill="#d97757"/>
+      <rect x="54" y="58" width="14" height="56" rx="4" fill="#faf9f5"/>
+      <rect x="92" y="58" width="14" height="56" rx="4" fill="#faf9f5"/>
+      <rect x="54" y="79" width="52" height="13" rx="3" fill="#faf9f5"/>
+    </g>
+    <text x="80" y="190" text-anchor="middle" font-size="14" font-weight="600" fill="#2a2722">⑧ H 字盒</text>
+  </g>
+
+  <!-- 9 投递口 -->
+  <g transform="translate(638,344)">
+    <rect width="160" height="160" rx="36" fill="#1f1e1d" filter="url(#soft)"/>
+    <g clip-path="url(#tile)">
+      <g transform="rotate(-12 80 52)">
+        <rect x="66" y="42" width="28" height="18" rx="5" fill="#faf9f5"/>
+        <rect x="71" y="49" width="18" height="3" rx="1.5" fill="#d4a27f"/>
+      </g>
+      <path d="M63 64 L66 68 L69 64" fill="none" stroke="#f0e7df" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M91 64 L94 68 L97 64" fill="none" stroke="#f0e7df" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="42" y="74" width="76" height="58" rx="14" fill="#d97757"/>
+      <rect x="58" y="80" width="44" height="9" rx="4.5" fill="#8f4a30"/>
+    </g>
+    <text x="80" y="190" text-anchor="middle" font-size="14" font-weight="600" fill="#2a2722">⑨ 投递口</text>
+  </g>
+
+  <!-- 10 嵌套盒 -->
+  <g transform="translate(834,344)">
+    <rect width="160" height="160" rx="36" fill="#d97757" filter="url(#soft)"/>
+    <g clip-path="url(#tile)">
+      <rect x="38" y="44" width="84" height="84" rx="22" fill="none" stroke="#faf9f5" stroke-width="5"/>
+      <rect x="56" y="62" width="48" height="48" rx="14" fill="none" stroke="#f7ede6" stroke-width="5"/>
+      <rect x="72" y="78" width="16" height="16" rx="5" fill="#faf9f5"/>
+    </g>
+    <text x="80" y="190" text-anchor="middle" font-size="14" font-weight="600" fill="#2a2722">⑩ 嵌套盒</text>
+  </g>
+
+  <!-- footer -->
+  <text x="50" y="568" font-size="13" fill="#4d493f">磁贴底色已示意应用图标背景（陶土 / 奶油 / 暖深三种磁贴）。在 VSCode 中右键 “Open Preview” 可缩放查看；告诉我编号即可微调或定稿。</text>
+</svg>

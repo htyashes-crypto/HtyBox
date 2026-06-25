@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="HtyBox perspective box icon">
+  <defs>
+    <clipPath id="front-face-clip">
+      <polygon points="145,380 512,405 512,880 145,705" />
+    </clipPath>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#faf9f5" />
+
+  <g transform="matrix(0.92 0 0 1 40.96 0)">
+
+  <!-- Body fills: the center seam is locked to x=512. -->
+  <polygon points="145,380 512,405 512,880 145,705" fill="#d97757" />
+  <polygon points="512,405 879,380 879,705 512,880" fill="#c15f3c" />
+
+  <!-- The wordmark is clipped to the front face and transformed onto the same plane. -->
+  <g clip-path="url(#front-face-clip)">
+    <text
+      x="0"
+      y="0"
+      transform="matrix(0.68 0.28 0 0.68 270 620)"
+      fill="#2b1c14"
+      opacity="0.92"
+      font-family="Brush Script MT, Segoe Script, Lucida Handwriting, cursive"
+      font-size="180"
+      font-weight="500"
+    >hty</text>
+  </g>
+
+  <!-- Body outline and true center seam. -->
+  <path
+    d="M145 380 L512 405 L879 380 L879 705 L512 880 L145 705 Z"
+    fill="none"
+    stroke="#191919"
+    stroke-width="22"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M512 405 L512 880"
+    fill="none"
+    stroke="#191919"
+    stroke-width="9"
+    stroke-linecap="butt"
+  />
+
+  <!-- Interior opening. -->
+  <polygon
+    points="512,90 230,235 512,405 794,235"
+    fill="#d97757"
+    stroke="#191919"
+    stroke-width="22"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M512 106 L512 392"
+    fill="none"
+    stroke="#a34a31"
+    stroke-width="8"
+    opacity="0.82"
+    stroke-linecap="butt"
+  />
+
+  <!-- Open flaps. -->
+  <polygon
+    points="230,235 95,390 350,535 512,405"
+    fill="#fffaf2"
+    stroke="#191919"
+    stroke-width="22"
+    stroke-linejoin="round"
+  />
+  <polygon
+    points="794,235 929,390 674,535 512,405"
+    fill="#ffffff"
+    stroke="#191919"
+    stroke-width="22"
+    stroke-linejoin="round"
+  />
+  </g>
+</svg>

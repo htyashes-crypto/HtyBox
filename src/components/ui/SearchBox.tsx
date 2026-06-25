@@ -1,3 +1,5 @@
+import { Search } from "@icon-park/react";
+
 export default function SearchBox({
   value,
   onChange,
@@ -9,18 +11,11 @@ export default function SearchBox({
 }) {
   return (
     <div className="relative">
-      <svg
-        className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-[#a8a29a]"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="11" cy="11" r="7" />
-        <path d="m21 21-4.3-4.3" />
-      </svg>
+      <Search
+        className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2"
+        size={14}
+        fill="#a8a29a"
+      />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
