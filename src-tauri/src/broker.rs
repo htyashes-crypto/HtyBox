@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter};
 use tiny_http::{Header, Method, Request, Response, Server};
 
 const PROTOCOL_VERSION: &str = "2025-06-18";
@@ -40,12 +41,14 @@ struct InboxMsg {
 struct Store {
     by_token: HashMap<String, AgentInfo>, // token -> 身份
     inbox: HashMap<String, Vec<InboxMsg>>, // agentId -> 未读
+    state: HashMap<String, String>,        // agentId -> "working"|"idle"|"pending"|"waiting"
     seq: u64,
 }
 
 pub struct Broker {
     port: u16,
     store: Mutex<Store>,
+    app: Mutex<Option<AppHandle>>, // setup 后注入，用于 emit "agent-wake"（半自动唤醒）
 }
 
 impl Broker {
@@ -57,7 +60,30 @@ impl Broker {
     pub fn register(&self, token: String, info: AgentInfo) {
         let mut s = self.store.lock().unwrap();
         s.inbox.entry(info.agent_id.clone()).or_default();
+        s.state.insert(info.agent_id.clone(), "working".to_string());
         s.by_token.insert(token, info);
+    }
+
+    /// setup 后注入 AppHandle，使 broker 能向前端 emit 事件（半自动唤醒）。
+    pub fn set_app(&self, app: AppHandle) {
+        *self.app.lock().unwrap() = Some(app);
+    }
+
+    /// 向前端发 "agent-wake"：某挂起的 agent 收到新消息，提示用户点击唤醒（半自动）。
+    fn emit_wake(&self, target: &AgentInfo, from: &str, preview: &str) {
+        if let Some(app) = self.app.lock().unwrap().as_ref() {
+            let preview: String = preview.chars().take(80).collect();
+            let _ = app.emit(
+                "agent-wake",
+                json!({
+                    "agentId": target.agent_id,
+                    "roleName": target.role_name,
+                    "workspace": target.workspace,
+                    "from": from,
+                    "preview": preview,
+                }),
+            );
+        }
     }
 
     fn lookup(&self, token: &str) -> Option<AgentInfo> {
@@ -111,8 +137,28 @@ impl Broker {
         match name {
             "whoami" => Ok(serde_json::to_value(caller).unwrap_or_else(|_| json!({}))),
             "list_agents" => {
-                let agents: Vec<&AgentInfo> = s.by_token.values().collect();
+                let agents: Vec<Value> = s
+                    .by_token
+                    .values()
+                    .map(|i| {
+                        json!({
+                            "agentId": i.agent_id, "role": i.role, "roleName": i.role_name,
+                            "workspace": i.workspace,
+                            "state": s.state.get(&i.agent_id).cloned().unwrap_or_else(|| "working".to_string()),
+                        })
+                    })
+                    .collect();
                 Ok(json!({ "agents": agents }))
+            }
+            "await_next" => {
+                // 挂起待对接：声明本回合做完、进入等待池。半自动下不阻塞，agent 应据此结束本回合。
+                s.state.insert(caller.agent_id.clone(), "idle".to_string());
+                Ok(json!({ "suspended": true, "note": "已挂起待对接：请结束本回合；有新消息时会被唤醒" }))
+            }
+            "update_status" => {
+                let st = args.get("state").and_then(|v| v.as_str()).unwrap_or("working");
+                s.state.insert(caller.agent_id.clone(), st.to_string());
+                Ok(json!({ "ok": true, "state": st }))
             }
             "read_inbox" => {
                 let msgs = s
@@ -137,12 +183,13 @@ impl Broker {
                     .unwrap_or("message")
                     .to_string();
                 // 目标可填 agentId 或 角色名
-                let target = s
+                let target_info = s
                     .by_token
                     .values()
                     .find(|i| i.agent_id == to || i.role_name == to)
-                    .map(|i| i.agent_id.clone())
+                    .cloned()
                     .ok_or((-32004, format!("找不到目标 agent: {to}")))?;
+                let target = target_info.agent_id.clone();
                 s.seq += 1;
                 let msg = InboxMsg {
                     from: caller.agent_id.clone(),
@@ -151,7 +198,18 @@ impl Broker {
                     seq: s.seq,
                 };
                 s.inbox.entry(target.clone()).or_default().push(msg);
-                Ok(json!({ "delivered": true, "to": target }))
+                // 目标处于挂起(非 working)→ 置 pending 并发唤醒事件（半自动：前端提示用户点击注入）
+                let cur = s
+                    .state
+                    .get(&target)
+                    .cloned()
+                    .unwrap_or_else(|| "working".to_string());
+                let need_wake = cur != "working";
+                if need_wake {
+                    s.state.insert(target.clone(), "pending".to_string());
+                    self.emit_wake(&target_info, &caller.agent_id, content);
+                }
+                Ok(json!({ "delivered": true, "to": target, "wake": need_wake }))
             }
             other => Err((-32601, format!("unknown tool: {other}"))),
         }
@@ -233,7 +291,13 @@ fn tool_defs() -> Value {
             "properties": { "to": {"type":"string"}, "content": {"type":"string"}, "type": {"type":"string"} },
             "required": ["to", "content"] } },
         { "name": "read_inbox", "description": "取走自己收件箱里的全部未读消息",
-          "inputSchema": { "type": "object", "properties": {} } }
+          "inputSchema": { "type": "object", "properties": {} } },
+        { "name": "await_next", "description": "挂起待对接：声明本回合做完、进入等待；有新消息会被唤醒",
+          "inputSchema": { "type": "object", "properties": { "note": {"type":"string"} } } },
+        { "name": "update_status", "description": "主动上报自己的状态(working/idle/waiting 等)",
+          "inputSchema": { "type": "object",
+            "properties": { "state": {"type":"string"}, "note": {"type":"string"} },
+            "required": ["state"] } }
     ])
 }
 
@@ -248,6 +312,7 @@ pub fn start() -> Arc<Broker> {
     let broker = Arc::new(Broker {
         port,
         store: Mutex::new(Store::default()),
+        app: Mutex::new(None),
     });
     let b = broker.clone();
     std::thread::spawn(move || {

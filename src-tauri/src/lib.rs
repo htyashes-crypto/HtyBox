@@ -159,6 +159,7 @@ fn setup_mcp_agent(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let broker = broker::start();
+    let broker_for_setup = broker.clone();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -166,8 +167,9 @@ pub fn run() {
             pty: PtyManager::default(),
             broker,
         })
-        .setup(|app| {
+        .setup(move |app| {
             watcher::start(app.handle().clone());
+            broker_for_setup.set_app(app.handle().clone()); // M7-B：broker 可发 "agent-wake" 事件
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

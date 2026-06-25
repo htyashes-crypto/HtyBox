@@ -5,6 +5,7 @@ import TerminalDock, { markWorkspaceClosing } from "./components/TerminalDock";
 import Welcome, { type RecentFolder } from "./components/Welcome";
 import SettingsModal from "./components/SettingsModal";
 import CollabModal from "./components/CollabModal";
+import WakeToasts from "./components/WakeToasts";
 import { disposeByPrefix } from "./components/terminalEngine";
 import { launchAgents, type AgentSpec } from "./mcp";
 
@@ -226,6 +227,9 @@ export default function App() {
           }}
         />
       )}
+
+      {/* M7-B 半自动唤醒提示（全局监听 broker 的 agent-wake） */}
+      <WakeToasts />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type AgentRole = "lead" | "worker";
 
@@ -42,4 +43,25 @@ export function launchAgents(workspaceId: string, specs: AgentSpec[]): boolean {
   if (!fn) return false;
   fn(specs);
   return true;
+}
+
+// ---- M7-B：agentId → termId 映射（半自动唤醒时定位要注入的终端）----
+const agentTerminals = new Map<string, string>();
+export function setAgentTerminal(agentId: string, termId: string): void {
+  agentTerminals.set(agentId, termId);
+}
+export function getAgentTerminal(agentId: string): string | undefined {
+  return agentTerminals.get(agentId);
+}
+
+// ---- M7-B：唤醒事件（broker 在某挂起 agent 收到新消息时 emit "agent-wake"）----
+export interface AgentWake {
+  agentId: string;
+  roleName: string;
+  workspace: string;
+  from: string;
+  preview: string;
+}
+export function onAgentWake(fn: (w: AgentWake) => void): Promise<UnlistenFn> {
+  return listen<AgentWake>("agent-wake", (e) => fn(e.payload));
 }

@@ -31,6 +31,7 @@ import codexIcon from "../assets/codex.svg";
 import {
   setupMcpAgent,
   registerAgentLauncher,
+  setAgentTerminal,
   type AgentSpec,
 } from "../mcp";
 
@@ -445,6 +446,7 @@ export default function TerminalDock({
         const label = (spec.role === "lead" ? "👑 " : "🔧 ") + spec.roleName;
         AGENT_LABELS[id] = label;
         saveAL();
+        setAgentTerminal(spec.agentId, id); // M7-B：供唤醒时定位终端注入
         // claude 读 .mcp.json、codex 读 .codex/config.toml（setupMcpAgent 已分别写好）；普通启动即可
         api.addPanel({
           id,
