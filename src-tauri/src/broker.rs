@@ -56,6 +56,7 @@ struct Store {
     state: HashMap<String, String>,        // agentId -> "working"|"idle"|"pending"|"waiting"
     tasks: Vec<Task>,                      // 任务板（assign_task/report_result）
     shared: HashMap<String, String>,       // 黑板（read_shared/write_shared，含总目标）
+    last_to: HashMap<String, (u64, u32)>,  // 目标 agentId -> (上条内容哈希, 连续重复次数)：死循环检测
     seq: u64,
 }
 
@@ -97,6 +98,26 @@ impl Broker {
                     "preview": preview,
                 }),
             );
+        }
+    }
+
+    /// 记录一次"投递给 target 的内容"，返回是否疑似死循环（同一内容连续投递 ≥3 次）。
+    fn note_delivery_loop(&self, s: &mut Store, target: &str, content: &str) -> bool {
+        let h = hash_str(content);
+        let entry = s.last_to.entry(target.to_string()).or_insert((0, 0));
+        if entry.0 == h {
+            entry.1 += 1;
+        } else {
+            *entry = (h, 1);
+        }
+        entry.1 >= 3
+    }
+
+    /// 向前端发 "agent-loop"：检测到 A↔B 同内容空转，前端据此停自动接力并告警。
+    fn emit_loop(&self, from: &str, to: &str, content: &str) {
+        if let Some(app) = self.app.lock().unwrap().as_ref() {
+            let preview: String = content.chars().take(60).collect();
+            let _ = app.emit("agent-loop", json!({ "from": from, "to": to, "preview": preview }));
         }
     }
 
@@ -249,6 +270,10 @@ impl Broker {
                     s.state.insert(target.agent_id.clone(), "pending".to_string());
                     self.emit_wake(&target, &caller.agent_id, &content);
                 }
+                // 死循环检测用原始 task 文本（格式化串含递增 tid，不会重复）
+                if self.note_delivery_loop(&mut s, &target.agent_id, task) {
+                    self.emit_loop(&caller.agent_id, &target.agent_id, task);
+                }
                 Ok(json!({ "taskId": tid, "worker": target.agent_id }))
             }
             "report_result" => {
@@ -375,6 +400,9 @@ impl Broker {
                     s.state.insert(target.clone(), "pending".to_string());
                     self.emit_wake(&target_info, &caller.agent_id, content);
                 }
+                if self.note_delivery_loop(&mut s, &target, content) {
+                    self.emit_loop(&caller.agent_id, &target, content);
+                }
                 Ok(json!({ "delivered": true, "to": target, "wake": need_wake }))
             }
             other => Err((-32601, format!("unknown tool: {other}"))),
@@ -437,6 +465,13 @@ impl Broker {
         };
         respond_json(req, &resp);
     }
+}
+
+fn hash_str(content: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    content.hash(&mut h);
+    h.finish()
 }
 
 fn respond_json(req: Request, body: &Value) {

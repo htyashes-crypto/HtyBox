@@ -56,10 +56,13 @@ export function launchAgents(workspaceId: string, specs: AgentSpec[]): boolean {
 // ---- M7-D：全自动接力预算 + 急停（防失控的最低护栏）----
 let relayCount = 0;
 let relayStopped = false;
+let relayStartAt = 0;
 const RELAY_CAP = 60; // 一轮运行内自动唤醒次数硬上限，触顶停自动(回退手动点击)
+const RELAY_MAX_MS = 30 * 60 * 1000; // 一轮运行时长上限(30min)，超时停自动
 export function resetRelay(): void {
   relayCount = 0;
   relayStopped = false;
+  relayStartAt = Date.now();
 }
 export function relayStop(): void {
   relayStopped = true;
@@ -70,11 +73,23 @@ export function relayResume(): void {
 export function relayIsStopped(): boolean {
   return relayStopped;
 }
-/** 申请一次自动唤醒额度；false = 已急停或触顶(应回退手动)。 */
+/** 申请一次自动唤醒额度；false = 已急停 / 触顶次数 / 超时(应回退手动)。 */
 export function relayAllow(): boolean {
-  if (relayStopped || relayCount >= RELAY_CAP) return false;
+  if (
+    relayStopped ||
+    relayCount >= RELAY_CAP ||
+    Date.now() - relayStartAt > RELAY_MAX_MS
+  )
+    return false;
   relayCount += 1;
   return true;
+}
+
+/** M7-D 急停：向所有 agent 终端发 Ctrl+C(\x03) 真中断（停注入之外的硬停）。 */
+export function interruptAllAgents(): void {
+  for (const termId of agentTerminals.values()) {
+    invoke("write_terminal", { id: termId, data: "\x03" }).catch(() => {});
+  }
 }
 export function relayUsage(): { count: number; cap: number; stopped: boolean } {
   return { count: relayCount, cap: RELAY_CAP, stopped: relayStopped };
@@ -99,4 +114,14 @@ export interface AgentWake {
 }
 export function onAgentWake(fn: (w: AgentWake) => void): Promise<UnlistenFn> {
   return listen<AgentWake>("agent-wake", (e) => fn(e.payload));
+}
+
+// ---- M7-D：死循环事件（broker 检测到同内容连发≥3 次的 A↔B 空转）----
+export interface AgentLoop {
+  from: string;
+  to: string;
+  preview: string;
+}
+export function onAgentLoop(fn: (l: AgentLoop) => void): Promise<UnlistenFn> {
+  return listen<AgentLoop>("agent-loop", (e) => fn(e.payload));
 }
