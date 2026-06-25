@@ -72,6 +72,7 @@ export function ensureEngine(
     fontFamily: '"Cascadia Code", "Consolas", monospace',
     fontSize: 13,
     cursorBlink: true,
+    cursorStyle: "bar", // 竖线光标（非粗块）
     scrollback: 5000,
     theme: {
       background: "#1f1e1d",
