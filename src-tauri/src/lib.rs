@@ -294,7 +294,13 @@ fn setup_mcp_agent(
 fn write_agent_brief(cwd: String, agent_id: String, content: String) -> Result<(), String> {
     let safe: String = agent_id
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let dir = std::path::Path::new(&cwd).join(".htybox");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -307,6 +313,8 @@ pub fn run() {
     let broker = broker::start();
     let broker_for_setup = broker.clone();
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState {

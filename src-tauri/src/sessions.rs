@@ -48,7 +48,12 @@ pub fn list_claude_sessions(cwd: &str) -> Vec<SessionRef> {
         let Some(id) = v.get("sessionId").and_then(|s| s.as_str()) else {
             continue;
         };
-        let display = v.get("display").and_then(|d| d.as_str()).unwrap_or("").trim().to_string();
+        let display = v
+            .get("display")
+            .and_then(|d| d.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
         let ts = v.get("timestamp").and_then(|t| t.as_i64()).unwrap_or(0);
         let is_slash = display.is_empty() || display.starts_with('/');
         match map.entry(id.to_string()) {
@@ -72,7 +77,11 @@ pub fn list_claude_sessions(cwd: &str) -> Vec<SessionRef> {
         .into_iter()
         .filter_map(|id| {
             map.get(&id).map(|(label, ts, _)| SessionRef {
-                label: if label.is_empty() { "(无标题)".into() } else { label.clone() },
+                label: if label.is_empty() {
+                    "(无标题)".into()
+                } else {
+                    label.clone()
+                },
                 id: id.clone(),
                 ts: *ts,
                 path: String::new(),
@@ -142,7 +151,11 @@ fn read_head_lines(path: &Path, max: usize) -> Vec<String> {
     let Ok(f) = std::fs::File::open(path) else {
         return Vec::new();
     };
-    BufReader::new(f).lines().map_while(Result::ok).take(max).collect()
+    BufReader::new(f)
+        .lines()
+        .map_while(Result::ok)
+        .take(max)
+        .collect()
 }
 
 /// 从一行 codex rollout 取首个 input_text 文本。
@@ -222,7 +235,11 @@ pub fn list_codex_sessions(cwd: &str) -> Vec<SessionRef> {
         }
         out.push(SessionRef {
             id,
-            label: if label.is_empty() { "(无标题)".into() } else { label },
+            label: if label.is_empty() {
+                "(无标题)".into()
+            } else {
+                label
+            },
             ts: mtime_ms(&p),
             path: p.to_string_lossy().into_owned(),
         });

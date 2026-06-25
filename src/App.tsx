@@ -11,6 +11,8 @@ import WindowControls from "./components/WindowControls";
 import { disposeByPrefix } from "./components/terminalEngine";
 import { launchAgents, type AgentSpec } from "./mcp";
 import { open } from "@tauri-apps/plugin-dialog";
+import UpdateModal from "./components/UpdateModal";
+import { checkForUpdate, getSkippedVersion, setSkippedVersion, type Update } from "./updater";
 
 function GearIcon() {
   return (
@@ -81,6 +83,8 @@ export default function App() {
   // 已挂载过的 workspace（懒挂载 + 挂载后常驻 → 切走/回欢迎页时 PTY 后台存活）
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [splitSizes] = useState(loadSplit); // 分栏宽度（持久化）
+  const [update, setUpdate] = useState<Update | null>(null); // 可用更新（null=无）
+  const [showUpdate, setShowUpdate] = useState(false); // 更新弹窗开关
 
   useEffect(() => {
     try {
@@ -89,6 +93,24 @@ export default function App() {
       /* ignore */
     }
   }, [recents]);
+
+  // 启动检查更新：有可用更新 → 记下；未被「跳过」则自动弹窗（端点不可达/离线静默忽略）
+  useEffect(() => {
+    checkForUpdate().then((u) => {
+      if (!u) return;
+      setUpdate(u);
+      if (getSkippedVersion() !== u.version) setShowUpdate(true);
+    });
+  }, []);
+
+  // 跳过/关闭更新弹窗：记住此版本（不再自动弹），左上角标仍保留可手动触发
+  const dismissUpdate = () => {
+    setUpdate((u) => {
+      if (u) setSkippedVersion(u.version);
+      return u;
+    });
+    setShowUpdate(false);
+  };
 
   const openFolder = (path: string) => {
     const id = slugify(path);
@@ -153,13 +175,27 @@ export default function App() {
           data-tauri-drag-region
           className="relative z-20 flex h-11 shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] pl-3 select-none"
         >
-          <button
-            onClick={() => setActiveId(null)}
-            title="返回欢迎页"
-            className="group flex items-center px-0.5"
-          >
-            <div className="h-5 w-5 rounded-md bg-[#d97757] shadow-sm transition-all duration-200 ease-out group-hover:-rotate-6 group-hover:scale-110 group-hover:bg-[#e0875f] group-hover:shadow-md group-active:scale-90 group-active:rotate-0" />
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setActiveId(null)}
+              title="返回欢迎页"
+              className="group flex items-center px-0.5"
+            >
+              <div className="h-5 w-5 rounded-md bg-[#d97757] shadow-sm transition-all duration-200 ease-out group-hover:-rotate-6 group-hover:scale-110 group-hover:bg-[#e0875f] group-hover:shadow-md group-active:scale-90 group-active:rotate-0" />
+            </button>
+            {update && (
+              <button
+                onClick={() => setShowUpdate(true)}
+                title={`发现新版本 v${update.version}，点击更新`}
+                className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#3aa655] text-white shadow ring-2 ring-[#f4f3ee]"
+              >
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#3aa655] opacity-60" />
+                <svg className="relative h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+              </button>
+            )}
+          </div>
           <div className="ml-3 flex items-center gap-1.5">
             {openWs.map((w) => {
               const isActive = w.id === activeId;
@@ -354,6 +390,9 @@ export default function App() {
           onClose={() => setShowQuickOpen(false)}
         />
       )}
+
+      {/* 自更新：发现新版本弹窗（更新日志 + 跳过/立刻更新 + 下载安装重启） */}
+      {showUpdate && update && <UpdateModal update={update} onDismiss={dismissUpdate} />}
 
       {/* M7-B 半自动唤醒提示（全局监听 broker 的 agent-wake） */}
       <WakeToasts />

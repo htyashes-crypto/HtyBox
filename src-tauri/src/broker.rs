@@ -61,14 +61,14 @@ struct LogEntry {
 
 #[derive(Default)]
 struct Store {
-    by_token: HashMap<String, AgentInfo>, // token -> 身份
+    by_token: HashMap<String, AgentInfo>,  // token -> 身份
     inbox: HashMap<String, Vec<InboxMsg>>, // agentId -> 未读
     state: HashMap<String, String>,        // agentId -> "working"|"idle"|"pending"|"waiting"
     tasks: Vec<Task>,                      // 任务板（assign_task/report_result）
     shared: HashMap<String, String>,       // 黑板（read_shared/write_shared，含总目标）
-    last_to: HashMap<String, (u64, u32)>,  // 目标 agentId -> (上条内容哈希, 连续重复次数)：死循环检测
-    claims: HashMap<String, String>,       // 归一化文件路径 -> 占用者 agentId（文件归属登记/冲突防护）
-    log: VecDeque<LogEntry>,               // 工具调用流环形缓冲（仪表盘/运行面板）
+    last_to: HashMap<String, (u64, u32)>, // 目标 agentId -> (上条内容哈希, 连续重复次数)：死循环检测
+    claims: HashMap<String, String>, // 归一化文件路径 -> 占用者 agentId（文件归属登记/冲突防护）
+    log: VecDeque<LogEntry>,         // 工具调用流环形缓冲（仪表盘/运行面板）
     seq: u64,
 }
 
@@ -173,7 +173,10 @@ impl Broker {
     fn emit_loop(&self, from: &str, to: &str, content: &str) {
         if let Some(app) = self.app.lock().unwrap().as_ref() {
             let preview: String = content.chars().take(60).collect();
-            let _ = app.emit("agent-loop", json!({ "from": from, "to": to, "preview": preview }));
+            let _ = app.emit(
+                "agent-loop",
+                json!({ "from": from, "to": to, "preview": preview }),
+            );
         }
     }
 
@@ -256,10 +259,15 @@ impl Broker {
             "await_next" => {
                 // 挂起待对接：声明本回合做完、进入等待池。半自动下不阻塞，agent 应据此结束本回合。
                 s.state.insert(caller.agent_id.clone(), "idle".to_string());
-                Ok(json!({ "suspended": true, "note": "已挂起待对接：请结束本回合；有新消息时会被唤醒" }))
+                Ok(
+                    json!({ "suspended": true, "note": "已挂起待对接：请结束本回合；有新消息时会被唤醒" }),
+                )
             }
             "update_status" => {
-                let st = args.get("state").and_then(|v| v.as_str()).unwrap_or("working");
+                let st = args
+                    .get("state")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("working");
                 s.state.insert(caller.agent_id.clone(), st.to_string());
                 Ok(json!({ "ok": true, "state": st }))
             }
@@ -320,22 +328,30 @@ impl Broker {
                 s.seq += 1;
                 let content = format!(
                     "【任务 {tid}】{task}（文件范围: {}）",
-                    if scope.is_empty() { "未限定" } else { &scope }
+                    if scope.is_empty() {
+                        "未限定"
+                    } else {
+                        &scope
+                    }
                 );
                 let seq = s.seq;
-                s.inbox.entry(target.agent_id.clone()).or_default().push(InboxMsg {
-                    from: caller.agent_id.clone(),
-                    content: content.clone(),
-                    msg_type: "task".to_string(),
-                    seq,
-                });
+                s.inbox
+                    .entry(target.agent_id.clone())
+                    .or_default()
+                    .push(InboxMsg {
+                        from: caller.agent_id.clone(),
+                        content: content.clone(),
+                        msg_type: "task".to_string(),
+                        seq,
+                    });
                 let cur = s
                     .state
                     .get(&target.agent_id)
                     .cloned()
                     .unwrap_or_else(|| "working".to_string());
                 if cur != "working" {
-                    s.state.insert(target.agent_id.clone(), "pending".to_string());
+                    s.state
+                        .insert(target.agent_id.clone(), "pending".to_string());
                     self.emit_wake(&target, &caller.agent_id, &content);
                 }
                 // 死循环检测用原始 task 文本（格式化串含递增 tid，不会重复）
@@ -364,16 +380,24 @@ impl Broker {
                     t.summary = summary.clone();
                     t.assigner.clone()
                 };
-                if let Some(lead) = s.by_token.values().find(|i| i.agent_id == assigner).cloned() {
+                if let Some(lead) = s
+                    .by_token
+                    .values()
+                    .find(|i| i.agent_id == assigner)
+                    .cloned()
+                {
                     s.seq += 1;
                     let content = format!("【{} 完成 {tid}】{summary}", caller.role_name);
                     let seq = s.seq;
-                    s.inbox.entry(lead.agent_id.clone()).or_default().push(InboxMsg {
-                        from: caller.agent_id.clone(),
-                        content: content.clone(),
-                        msg_type: "result".to_string(),
-                        seq,
-                    });
+                    s.inbox
+                        .entry(lead.agent_id.clone())
+                        .or_default()
+                        .push(InboxMsg {
+                            from: caller.agent_id.clone(),
+                            content: content.clone(),
+                            msg_type: "result".to_string(),
+                            seq,
+                        });
                     let cur = s
                         .state
                         .get(&lead.agent_id)
@@ -401,12 +425,15 @@ impl Broker {
                 for t in &targets {
                     s.seq += 1;
                     let seq = s.seq;
-                    s.inbox.entry(t.agent_id.clone()).or_default().push(InboxMsg {
-                        from: caller.agent_id.clone(),
-                        content: content.clone(),
-                        msg_type: "broadcast".to_string(),
-                        seq,
-                    });
+                    s.inbox
+                        .entry(t.agent_id.clone())
+                        .or_default()
+                        .push(InboxMsg {
+                            from: caller.agent_id.clone(),
+                            content: content.clone(),
+                            msg_type: "broadcast".to_string(),
+                            seq,
+                        });
                     let cur = s
                         .state
                         .get(&t.agent_id)
@@ -593,8 +620,8 @@ fn normalize_path(p: &str) -> String {
 }
 
 fn respond_json(req: Request, body: &Value) {
-    let json_header = Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..])
-        .expect("static header");
+    let json_header =
+        Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).expect("static header");
     let resp = Response::from_string(body.to_string()).with_header(json_header);
     let _ = req.respond(resp);
 }
@@ -648,11 +675,7 @@ fn tool_defs() -> Value {
 /// 启动 broker：绑定 127.0.0.1 随机端口，开后台线程跑请求循环；返回句柄。
 pub fn start() -> Arc<Broker> {
     let server = Server::http("127.0.0.1:0").expect("MCP broker 绑定失败");
-    let port = server
-        .server_addr()
-        .to_ip()
-        .map(|a| a.port())
-        .unwrap_or(0);
+    let port = server.server_addr().to_ip().map(|a| a.port()).unwrap_or(0);
     let broker = Arc::new(Broker {
         port,
         store: Mutex::new(Store::default()),

@@ -150,7 +150,11 @@ pub fn scan_skills(project_dir: Option<&str>) -> Vec<Skill> {
         );
     }
     if let Some(pd) = project_dir.filter(|p| !p.is_empty()) {
-        scan_skill_dir(&Path::new(pd).join(".claude").join("skills"), "project", &mut out);
+        scan_skill_dir(
+            &Path::new(pd).join(".claude").join("skills"),
+            "project",
+            &mut out,
+        );
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     out
@@ -274,7 +278,11 @@ pub fn set_skill_enabled(project_dir: &str, dir: &str, enabled: bool) -> Result<
     let base = Path::new(project_dir).join(".claude");
     let active = base.join("skills").join(dir);
     let down = base.join("downtime").join("skills").join(dir);
-    let (from, to) = if enabled { (&down, &active) } else { (&active, &down) };
+    let (from, to) = if enabled {
+        (&down, &active)
+    } else {
+        (&active, &down)
+    };
     if !from.is_dir() {
         return Err(format!("源目录不存在：{}", from.display()));
     }
@@ -364,7 +372,11 @@ pub fn list_projects() -> Vec<ProjectRef> {
             }
         }
     }
-    out.sort_by(|a, b| b.memory_count.cmp(&a.memory_count).then(a.slug.cmp(&b.slug)));
+    out.sort_by(|a, b| {
+        b.memory_count
+            .cmp(&a.memory_count)
+            .then(a.slug.cmp(&b.slug))
+    });
     out
 }
 

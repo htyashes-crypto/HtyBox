@@ -20,7 +20,11 @@ pub fn list_dir(path: &str) -> Result<Vec<DirEntry>, String> {
     let mut out = Vec::new();
     for e in rd.flatten() {
         let p = e.path();
-        let Some(name) = p.file_name().and_then(|n| n.to_str()).map(|s| s.to_string()) else {
+        let Some(name) = p
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+        else {
             continue;
         };
         out.push(DirEntry {
@@ -62,14 +66,21 @@ pub fn read_text_file(path: &str) -> Result<ReadTextResult, String> {
         reason: Some(reason),
     };
     if meta.len() > MAX_EDIT_BYTES {
-        return Ok(not_editable(format!("文件过大（{} KB），不支持编辑", meta.len() / 1024)));
+        return Ok(not_editable(format!(
+            "文件过大（{} KB），不支持编辑",
+            meta.len() / 1024
+        )));
     }
     let bytes = std::fs::read(p).map_err(|e| e.to_string())?;
     if bytes.contains(&0) {
         return Ok(not_editable("二进制文件，不支持编辑".to_string()));
     }
     match String::from_utf8(bytes) {
-        Ok(content) => Ok(ReadTextResult { content, editable: true, reason: None }),
+        Ok(content) => Ok(ReadTextResult {
+            content,
+            editable: true,
+            reason: None,
+        }),
         Err(_) => Ok(not_editable("非 UTF-8 文本，不支持编辑".to_string())),
     }
 }
@@ -81,7 +92,13 @@ pub fn write_text_file(path: &str, content: &str) -> Result<(), String> {
 /// 校验新名安全（防越界/非法）。
 fn sanitize_name(name: &str) -> Result<String, String> {
     let n = name.trim();
-    if n.is_empty() || n.contains('/') || n.contains('\\') || n == "." || n == ".." || n.contains("..") {
+    if n.is_empty()
+        || n.contains('/')
+        || n.contains('\\')
+        || n == "."
+        || n == ".."
+        || n.contains("..")
+    {
         return Err(format!("非法名称：{name}"));
     }
     Ok(n.to_string())
@@ -146,7 +163,9 @@ fn copy_recursive(src: &Path, dst: &Path) -> Result<(), String> {
         }
         Ok(())
     } else {
-        std::fs::copy(src, dst).map(|_| ()).map_err(|e| e.to_string())
+        std::fs::copy(src, dst)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -181,7 +200,11 @@ pub fn copy_entry(src: &str, dest_dir: &str) -> Result<String, String> {
     if dest == s || dest.starts_with(s) {
         return Err("不能复制到自身或其子目录".into());
     }
-    let name = s.file_name().ok_or("无效源")?.to_string_lossy().into_owned();
+    let name = s
+        .file_name()
+        .ok_or("无效源")?
+        .to_string_lossy()
+        .into_owned();
     let target = unique_in_dir(dest, &name);
     copy_recursive(s, &target)?;
     Ok(target.to_string_lossy().into_owned())
@@ -207,9 +230,27 @@ pub fn reveal_in_explorer(path: &str) -> Result<(), String> {
 // ---------------- M9：全局文件搜索（双击 Shift）----------------
 
 const SKIP_DIRS: &[&str] = &[
-    "node_modules", ".git", ".svn", ".hg", ".plastic", "target", "Library", "Temp",
-    "Obj", "obj", "Build", "Builds", "Logs", "dist", "build", ".next", "bin", ".cache",
-    ".vs", "MemoryCaptures", "UserSettings",
+    "node_modules",
+    ".git",
+    ".svn",
+    ".hg",
+    ".plastic",
+    "target",
+    "Library",
+    "Temp",
+    "Obj",
+    "obj",
+    "Build",
+    "Builds",
+    "Logs",
+    "dist",
+    "build",
+    ".next",
+    "bin",
+    ".cache",
+    ".vs",
+    "MemoryCaptures",
+    "UserSettings",
 ];
 const MAX_FILES: usize = 100000;
 
@@ -223,7 +264,11 @@ pub struct FileRef {
 
 /// 递归列工作区所有文件（跳过常见重目录 + 忽略名单的文件夹名/扩展名，上限 MAX_FILES）。
 /// 供 quick-open 前端过滤。skip_folders=忽略的文件夹名，skip_exts=忽略的扩展名(不含点)。
-pub fn list_all_files(root: &str, skip_folders: Vec<String>, skip_exts: Vec<String>) -> Vec<FileRef> {
+pub fn list_all_files(
+    root: &str,
+    skip_folders: Vec<String>,
+    skip_exts: Vec<String>,
+) -> Vec<FileRef> {
     use std::collections::HashSet;
     let root_path = Path::new(root);
     let folderset: HashSet<String> = skip_folders.into_iter().collect();
@@ -252,7 +297,11 @@ pub fn list_all_files(root: &str, skip_folders: Vec<String>, skip_exts: Vec<Stri
                 }
             }
         }
-        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        let name = p
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
         let rel = p
             .strip_prefix(root_path)
             .ok()

@@ -64,7 +64,10 @@ impl PtyManager {
             })
             .map_err(|e| format!("openpty: {e}"))?;
 
-        let shell = opts.shell.filter(|s| !s.is_empty()).unwrap_or_else(default_shell);
+        let shell = opts
+            .shell
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(default_shell);
         let mut cmd = CommandBuilder::new(&shell);
         match opts.cwd.filter(|c| !c.is_empty()) {
             Some(cwd) => cmd.cwd(cwd),

@@ -31,4 +31,8 @@ tauri-plugin-dialog = "2.7.1"
 tiny_http = "0.12.0"
 toml_edit = "0.25.12"
 trash = "5"
+tauri-plugin-process = "2"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
 
