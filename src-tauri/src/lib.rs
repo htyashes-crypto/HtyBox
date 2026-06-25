@@ -76,6 +76,12 @@ fn broker_snapshot(state: State<'_, AppState>) -> serde_json::Value {
     state.broker.snapshot()
 }
 
+/// M7-H：agent 终端退出(主动关/崩溃) → 按 token 从 broker 花名册注销该实例。
+#[tauri::command]
+fn agent_exited(state: State<'_, AppState>, token: String) {
+    state.broker.unregister(&token);
+}
+
 /// 把 htybox 这个 MCP server **合并**进 `<cwd>/.mcp.json`（保留用户已有的 server，如 unity-mcp）。
 /// 用 `${HTYBOX_MCP_TOKEN}` 占位，token 由每个终端进程的环境变量提供 → 一份配置可区分多 agent。
 fn write_mcp_json(cwd: &str, url: &str) -> Result<(), String> {
@@ -205,7 +211,8 @@ pub fn run() {
             mcp_broker_url,
             setup_mcp_agent,
             write_agent_brief,
-            broker_snapshot
+            broker_snapshot,
+            agent_exited
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

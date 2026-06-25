@@ -464,6 +464,7 @@ export default function TerminalDock({
           responsibility: spec.responsibility,
           cwd,
           workspaceId,
+          token,
         });
         // M7-C：写协作简报（角色/职责/协议/花名册），启动用位置 prompt 让它先读 → 自己按协议协作
         try {

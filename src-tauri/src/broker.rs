@@ -123,6 +123,18 @@ impl Broker {
         s.by_token.insert(token, info);
     }
 
+    /// agent 终端退出(主动关/崩溃) → 从花名册移除该 token 实例；该 agentId 无其它 token 时清状态。
+    /// inbox/tasks 按 agentId 保留（崩溃替补复用同 agentId 续在办任务）。
+    pub fn unregister(&self, token: &str) {
+        let mut s = self.store.lock().unwrap();
+        if let Some(info) = s.by_token.remove(token) {
+            let still = s.by_token.values().any(|i| i.agent_id == info.agent_id);
+            if !still {
+                s.state.remove(&info.agent_id);
+            }
+        }
+    }
+
     /// setup 后注入 AppHandle，使 broker 能向前端 emit 事件（半自动唤醒）。
     pub fn set_app(&self, app: AppHandle) {
         *self.app.lock().unwrap() = Some(app);

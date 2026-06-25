@@ -170,7 +170,12 @@ export interface TermAgentInfo {
   responsibility?: string;
   cwd: string;
   workspaceId: string;
+  token: string; // broker 注册用的 token（退出时按它精确注销该实例）
 }
+
+/** M7-H：agent 终端退出 → 按 token 从 broker 花名册注销该实例。 */
+export const agentExited = (token: string) =>
+  invoke<void>("agent_exited", { token });
 const termAgents = new Map<string, TermAgentInfo>();
 const intentionallyClosed = new Set<string>(); // 用户主动关闭的终端 → 退出事件不当崩溃
 

@@ -7,6 +7,7 @@ import {
   getAgentTerminal,
   getTermAgent,
   wasIntentionallyClosed,
+  agentExited,
   launchAgents,
   termInfoToSpec,
   bumpRespawn,
@@ -39,9 +40,10 @@ export default function WakeToasts() {
   // 终端退出（M7-H 崩溃自愈）：排除主动关闭；急停中/熔断不替补，否则按原身份自动替补 + 复职简报
   useEffect(() => {
     const un = onTerminalExit((termId) => {
-      if (wasIntentionallyClosed(termId)) return;
       const info = getTermAgent(termId);
-      if (!info) return;
+      if (!info) return; // 非 agent 终端
+      agentExited(info.token); // 主动关/崩溃都先从 broker 花名册注销该实例
+      if (wasIntentionallyClosed(termId)) return; // 主动关：不替补、不提示
       const push = (text: string) =>
         setDowns((cur) => [...cur.filter((x) => x.termId !== termId), { termId, text }]);
       if (relayUsage().stopped) return push(`${info.roleName} 终端已退出（急停中，不替补）`);
