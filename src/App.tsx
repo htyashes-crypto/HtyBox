@@ -12,6 +12,7 @@ import { disposeByPrefix } from "./components/terminalEngine";
 import { launchAgents, type AgentSpec } from "./mcp";
 import { open } from "@tauri-apps/plugin-dialog";
 import UpdateModal from "./components/UpdateModal";
+import HtyBoxLogo from "./components/ui/HtyBoxLogo";
 import { checkForUpdate, getSkippedVersion, setSkippedVersion, type Update } from "./updater";
 
 function GearIcon() {
@@ -72,16 +73,46 @@ function saveSplit(sizes: number[]): void {
   }
 }
 
+// 已打开的工作区 + 活动工作区持久化（退出重进复原标签栏）
+const OPEN_KEY = "htybox.openWorkspaces.v1";
+function loadOpen(): { ws: Workspace[]; active: string | null } {
+  try {
+    const v = JSON.parse(localStorage.getItem(OPEN_KEY) || "null");
+    if (v && Array.isArray(v.ws)) {
+      const ws: Workspace[] = v.ws.filter(
+        (w: unknown): w is Workspace =>
+          !!w &&
+          typeof (w as Workspace).id === "string" &&
+          typeof (w as Workspace).name === "string" &&
+          typeof (w as Workspace).path === "string",
+      );
+      const active = ws.some((w) => w.id === v.active)
+        ? (v.active as string)
+        : ws.length
+          ? ws[ws.length - 1].id
+          : null;
+      return { ws, active };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { ws: [], active: null };
+}
+
 export default function App() {
+  const [persisted] = useState(loadOpen);
   const [recents, setRecents] = useState<RecentFolder[]>(loadRecents);
-  const [openWs, setOpenWs] = useState<Workspace[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [openWs, setOpenWs] = useState<Workspace[]>(persisted.ws);
+  const [activeId, setActiveId] = useState<string | null>(persisted.active);
   const [showSettings, setShowSettings] = useState(false);
   const [showCollab, setShowCollab] = useState(false);
   const [showQuickOpen, setShowQuickOpen] = useState(false);
   const [showWsPicker, setShowWsPicker] = useState(false); // 顶栏「+」工作区选择下拉
   // 已挂载过的 workspace（懒挂载 + 挂载后常驻 → 切走/回欢迎页时 PTY 后台存活）
-  const [opened, setOpened] = useState<Set<string>>(new Set());
+  // 复原时只挂载活动工作区，其余标签待点击时再挂载
+  const [opened, setOpened] = useState<Set<string>>(
+    () => new Set(persisted.active ? [persisted.active] : []),
+  );
   const [splitSizes] = useState(loadSplit); // 分栏宽度（持久化）
   const [update, setUpdate] = useState<Update | null>(null); // 可用更新（null=无）
   const [showUpdate, setShowUpdate] = useState(false); // 更新弹窗开关
@@ -93,6 +124,15 @@ export default function App() {
       /* ignore */
     }
   }, [recents]);
+
+  // 持久化已打开的工作区 + 活动工作区（退出重进复原标签栏）
+  useEffect(() => {
+    try {
+      localStorage.setItem(OPEN_KEY, JSON.stringify({ ws: openWs, active: activeId }));
+    } catch {
+      /* ignore */
+    }
+  }, [openWs, activeId]);
 
   // 启动检查更新：有可用更新 → 记下；未被「跳过」则自动弹窗（端点不可达/离线静默忽略）
   useEffect(() => {
@@ -179,9 +219,9 @@ export default function App() {
             <button
               onClick={() => setActiveId(null)}
               title="返回欢迎页"
-              className="group flex items-center px-0.5"
+              className="flex items-center px-0.5"
             >
-              <div className="h-5 w-5 rounded-md bg-[#d97757] shadow-sm transition-all duration-200 ease-out group-hover:-rotate-6 group-hover:scale-110 group-hover:bg-[#e0875f] group-hover:shadow-md group-active:scale-90 group-active:rotate-0" />
+              <HtyBoxLogo size={28} initial="open" openOnHover className="transition-transform duration-200 ease-out hover:scale-110 hover:-rotate-6" />
             </button>
             {update && (
               <button
@@ -202,7 +242,10 @@ export default function App() {
               return (
                 <div
                   key={w.id}
-                  onClick={() => setActiveId(w.id)}
+                  onClick={() => {
+                    setActiveId(w.id);
+                    setOpened((s) => (s.has(w.id) ? s : new Set(s).add(w.id)));
+                  }}
                   title={w.path}
                   className={
                     "group flex cursor-pointer items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors " +
@@ -302,10 +345,10 @@ export default function App() {
             </button>
             <button
               onClick={() => setShowCollab(true)}
-              title="多 Agent 协作：团队库 / 配置 / 一键开启"
+              title="Agent Team：团队库 / 配置 / 一键开启"
               className="cursor-pointer rounded-md border border-[#e8c8bb] bg-[#d97757]/12 px-3 py-1 text-xs font-semibold text-[#c15f3c] transition-colors hover:bg-[#d97757]/20"
             >
-              多 Agent 协作
+              Agent Team
             </button>
           </div>
           <WindowControls />

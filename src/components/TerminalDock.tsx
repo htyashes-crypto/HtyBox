@@ -28,6 +28,7 @@ import {
 } from "../profiles";
 import claudeIcon from "../assets/claude.svg";
 import codexIcon from "../assets/codex.svg";
+import HtyBoxLogo from "./ui/HtyBoxLogo";
 import {
   setupMcpAgent,
   registerAgentLauncher,
@@ -332,6 +333,33 @@ const paramsFor = (p: Profile, id: string, cwd: string): TermParams => ({
   cwd,
 });
 
+/** dock 空态水印：无任何终端/编辑器面板时，奶油底 + hty 盒子 logo + 常用操作提示（Cursor 式）。 */
+function DockWatermark() {
+  const kc = "rounded bg-[#ecebe2] px-1.5 py-0.5 font-mono text-[11px] leading-none text-[#73726c]";
+  const row = (label: string, val: React.ReactNode) => (
+    <div className="flex items-center justify-between gap-10">
+      <span className="text-[#a8a29a]">{label}</span>
+      <span className="flex items-center gap-1 text-[#8c8a82]">{val}</span>
+    </div>
+  );
+  return (
+    <div className="flex h-full w-full select-none flex-col items-center justify-center gap-8 bg-[#faf9f5]">
+      <HtyBoxLogo size={128} initial="open" openOnHover />
+      <div className="flex w-[268px] flex-col gap-2.5 text-[12.5px]">
+        {row("新建终端", <span>点击上方 ▸_ / Claude / Codex</span>)}
+        {row(
+          "搜索文件",
+          <>
+            <kbd className={kc}>Shift</kbd>
+            <kbd className={kc}>Shift</kbd>
+          </>,
+        )}
+        {row("注入引用", <span>拖 Skill / 文件 入终端</span>)}
+      </div>
+    </div>
+  );
+}
+
 /** 终端区：一个 workspace 一个实例；终端 id/布局键按 workspace 隔离，cwd=工作区文件夹。 */
 export default function TerminalDock({
   workspaceId,
@@ -461,23 +489,8 @@ export default function TerminalDock({
       }
       if (restored) {
         termNo = Math.max(termNo, api.panels.length);
-      } else {
-        const id1 = mkId();
-        api.addPanel({
-          id: id1,
-          component: "terminal",
-          title: titleFor(DEFAULT_PROFILE),
-          params: paramsFor(DEFAULT_PROFILE, id1, cwd),
-        });
-        const id2 = mkId();
-        api.addPanel({
-          id: id2,
-          component: "terminal",
-          title: titleFor(DEFAULT_PROFILE),
-          params: paramsFor(DEFAULT_PROFILE, id2, cwd),
-          position: { referencePanel: id1, direction: "right" },
-        });
       }
+      // 无已存布局：不再默认建终端，留空 → 显示 DockWatermark，由用户点工具栏图标手动新建
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -646,6 +659,7 @@ export default function TerminalDock({
         <DockviewReact
           components={components}
           defaultTabComponent={DockTab}
+          watermarkComponent={DockWatermark}
           onReady={onReady}
         />
       </div>

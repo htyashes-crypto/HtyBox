@@ -49,7 +49,8 @@ export default function SessionPanel({ root, workspaceId }: { root: string; work
     try {
       if (agentKind === "claude") await deleteClaudeSession(s.id);
       else await deleteCodexSession(s.path);
-      load(agentKind);
+      // 乐观移除：直接从列表剔除该项，避免整列重载导致滚动条跳回顶部
+      setList((prev) => (prev ? prev.filter((x) => x.id !== s.id) : prev));
     } catch {
       /* ignore */
     }

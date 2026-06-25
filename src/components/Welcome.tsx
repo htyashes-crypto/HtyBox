@@ -1,5 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import WindowControls from "./WindowControls";
+import HtyBoxLogo from "./ui/HtyBoxLogo";
 
 export interface RecentFolder {
   name: string;
@@ -51,12 +52,9 @@ export default function Welcome({
       </button>
       <div className="flex w-[520px] flex-col">
         {/* 品牌 */}
-        <div className="mb-1 flex items-center justify-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-[#d97757]" />
-          <span className="text-2xl font-bold tracking-tight">HtyBox</span>
-        </div>
-        <div className="mb-8 text-center text-xs text-[#8c8a82]">
-          多终端 · Skill / Memory · 多 Agent 协作
+        <div className="mb-10 flex items-center justify-center gap-5">
+          <HtyBoxLogo size={144} initial="closed" introOnMount openOnHover />
+          <span className="text-7xl font-bold tracking-tight">HtyBox</span>
         </div>
 
         {/* 打开文件夹 */}

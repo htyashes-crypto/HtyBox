@@ -101,7 +101,7 @@ export default function CollabModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] px-4 py-3">
-          <span className="text-sm font-bold text-[#191919]">多 Agent 协作</span>
+          <span className="text-sm font-bold text-[#191919]">Agent Team</span>
           <div className="ml-2 flex gap-1">
             {(["library", "run"] as const).map((t) => (
               <button
