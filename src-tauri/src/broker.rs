@@ -37,11 +37,25 @@ struct InboxMsg {
     seq: u64,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Task {
+    id: String,
+    assigner: String,   // 派活者 agentId（Lead）
+    worker: String,     // 承接者 agentId
+    task: String,       // 任务内容
+    file_scope: String, // 文件范围（空=未限定）
+    status: String,     // "assigned" | "done"
+    summary: String,    // report_result 回填
+}
+
 #[derive(Default)]
 struct Store {
     by_token: HashMap<String, AgentInfo>, // token -> 身份
     inbox: HashMap<String, Vec<InboxMsg>>, // agentId -> 未读
     state: HashMap<String, String>,        // agentId -> "working"|"idle"|"pending"|"waiting"
+    tasks: Vec<Task>,                      // 任务板（assign_task/report_result）
+    shared: HashMap<String, String>,       // 黑板（read_shared/write_shared，含总目标）
     seq: u64,
 }
 
@@ -159,6 +173,158 @@ impl Broker {
                 let st = args.get("state").and_then(|v| v.as_str()).unwrap_or("working");
                 s.state.insert(caller.agent_id.clone(), st.to_string());
                 Ok(json!({ "ok": true, "state": st }))
+            }
+            "list_tasks" => Ok(json!({ "tasks": s.tasks })),
+            "write_shared" => {
+                let key = args
+                    .get("key")
+                    .and_then(|v| v.as_str())
+                    .ok_or((-32602, "write_shared 需要 key".to_string()))?;
+                let val = args
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                s.shared.insert(key.to_string(), val);
+                Ok(json!({ "ok": true }))
+            }
+            "read_shared" => {
+                let key = args
+                    .get("key")
+                    .and_then(|v| v.as_str())
+                    .ok_or((-32602, "read_shared 需要 key".to_string()))?;
+                Ok(json!({ "key": key, "value": s.shared.get(key).cloned() }))
+            }
+            "assign_task" => {
+                let worker = args
+                    .get("workerId")
+                    .or_else(|| args.get("worker"))
+                    .and_then(|v| v.as_str())
+                    .ok_or((-32602, "assign_task 需要 workerId".to_string()))?;
+                let task = args
+                    .get("task")
+                    .and_then(|v| v.as_str())
+                    .ok_or((-32602, "assign_task 需要 task".to_string()))?;
+                let scope = args
+                    .get("fileScope")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let target = s
+                    .by_token
+                    .values()
+                    .find(|i| i.agent_id == worker || i.role_name == worker)
+                    .cloned()
+                    .ok_or((-32004, format!("找不到 worker: {worker}")))?;
+                s.seq += 1;
+                let tid = format!("t{}", s.seq);
+                s.tasks.push(Task {
+                    id: tid.clone(),
+                    assigner: caller.agent_id.clone(),
+                    worker: target.agent_id.clone(),
+                    task: task.to_string(),
+                    file_scope: scope.clone(),
+                    status: "assigned".to_string(),
+                    summary: String::new(),
+                });
+                // 通知 worker（进收件箱）+ 唤醒
+                s.seq += 1;
+                let content = format!(
+                    "【任务 {tid}】{task}（文件范围: {}）",
+                    if scope.is_empty() { "未限定" } else { &scope }
+                );
+                let seq = s.seq;
+                s.inbox.entry(target.agent_id.clone()).or_default().push(InboxMsg {
+                    from: caller.agent_id.clone(),
+                    content: content.clone(),
+                    msg_type: "task".to_string(),
+                    seq,
+                });
+                let cur = s
+                    .state
+                    .get(&target.agent_id)
+                    .cloned()
+                    .unwrap_or_else(|| "working".to_string());
+                if cur != "working" {
+                    s.state.insert(target.agent_id.clone(), "pending".to_string());
+                    self.emit_wake(&target, &caller.agent_id, &content);
+                }
+                Ok(json!({ "taskId": tid, "worker": target.agent_id }))
+            }
+            "report_result" => {
+                let tid = args
+                    .get("taskId")
+                    .and_then(|v| v.as_str())
+                    .ok_or((-32602, "report_result 需要 taskId".to_string()))?;
+                let summary = args
+                    .get("summary")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let assigner = {
+                    let t = s
+                        .tasks
+                        .iter_mut()
+                        .find(|t| t.id == tid)
+                        .ok_or((-32004, format!("找不到任务: {tid}")))?;
+                    t.status = "done".to_string();
+                    t.summary = summary.clone();
+                    t.assigner.clone()
+                };
+                if let Some(lead) = s.by_token.values().find(|i| i.agent_id == assigner).cloned() {
+                    s.seq += 1;
+                    let content = format!("【{} 完成 {tid}】{summary}", caller.role_name);
+                    let seq = s.seq;
+                    s.inbox.entry(lead.agent_id.clone()).or_default().push(InboxMsg {
+                        from: caller.agent_id.clone(),
+                        content: content.clone(),
+                        msg_type: "result".to_string(),
+                        seq,
+                    });
+                    let cur = s
+                        .state
+                        .get(&lead.agent_id)
+                        .cloned()
+                        .unwrap_or_else(|| "working".to_string());
+                    if cur != "working" {
+                        s.state.insert(lead.agent_id.clone(), "pending".to_string());
+                        self.emit_wake(&lead, &caller.agent_id, &content);
+                    }
+                }
+                Ok(json!({ "ok": true, "taskId": tid }))
+            }
+            "broadcast" => {
+                let content = args
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .ok_or((-32602, "broadcast 需要 content".to_string()))?
+                    .to_string();
+                let targets: Vec<AgentInfo> = s
+                    .by_token
+                    .values()
+                    .filter(|i| i.agent_id != caller.agent_id)
+                    .cloned()
+                    .collect();
+                for t in &targets {
+                    s.seq += 1;
+                    let seq = s.seq;
+                    s.inbox.entry(t.agent_id.clone()).or_default().push(InboxMsg {
+                        from: caller.agent_id.clone(),
+                        content: content.clone(),
+                        msg_type: "broadcast".to_string(),
+                        seq,
+                    });
+                    let cur = s
+                        .state
+                        .get(&t.agent_id)
+                        .cloned()
+                        .unwrap_or_else(|| "working".to_string());
+                    if cur != "working" {
+                        s.state.insert(t.agent_id.clone(), "pending".to_string());
+                        self.emit_wake(t, &caller.agent_id, &content);
+                    }
+                }
+                Ok(json!({ "broadcast": targets.len() }))
             }
             "read_inbox" => {
                 let msgs = s
@@ -297,7 +463,24 @@ fn tool_defs() -> Value {
         { "name": "update_status", "description": "主动上报自己的状态(working/idle/waiting 等)",
           "inputSchema": { "type": "object",
             "properties": { "state": {"type":"string"}, "note": {"type":"string"} },
-            "required": ["state"] } }
+            "required": ["state"] } },
+        { "name": "assign_task", "description": "[Lead] 给某 worker(按 agentId 或角色名)派任务、定文件范围，并唤醒它",
+          "inputSchema": { "type": "object",
+            "properties": { "workerId": {"type":"string"}, "task": {"type":"string"}, "fileScope": {"type":"string"} },
+            "required": ["workerId", "task"] } },
+        { "name": "report_result", "description": "[Worker] 回报任务结果(标记完成、唤醒派活的 Lead)",
+          "inputSchema": { "type": "object",
+            "properties": { "taskId": {"type":"string"}, "summary": {"type":"string"}, "artifacts": {"type":"string"} },
+            "required": ["taskId", "summary"] } },
+        { "name": "broadcast", "description": "[Lead] 给团队其余所有 agent 群发一条消息并唤醒",
+          "inputSchema": { "type": "object", "properties": { "content": {"type":"string"} }, "required": ["content"] } },
+        { "name": "list_tasks", "description": "查看任务板(全部任务及状态)",
+          "inputSchema": { "type": "object", "properties": {} } },
+        { "name": "write_shared", "description": "写共享黑板(团队公共结论/总目标等)",
+          "inputSchema": { "type": "object",
+            "properties": { "key": {"type":"string"}, "value": {"type":"string"} }, "required": ["key", "value"] } },
+        { "name": "read_shared", "description": "读共享黑板某个 key",
+          "inputSchema": { "type": "object", "properties": { "key": {"type":"string"} }, "required": ["key"] } }
     ])
 }
 
