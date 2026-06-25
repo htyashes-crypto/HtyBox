@@ -1,5 +1,6 @@
 mod broker;
 mod catalog;
+mod fs_tree;
 mod pty;
 mod watcher;
 
@@ -62,6 +63,30 @@ fn list_memories(slug: String) -> Vec<catalog::MemoryItem> {
 #[tauri::command]
 fn list_projects() -> Vec<catalog::ProjectRef> {
     catalog::list_projects()
+}
+
+/// M8：列工作区级 上架+下架 的全部 skill（带 enabled 标记）。
+#[tauri::command]
+fn list_managed_skills(project_dir: String) -> Vec<catalog::ManagedSkill> {
+    catalog::scan_managed_skills(&project_dir)
+}
+
+/// M8：上架/下架单个 skill（在 .claude/skills ↔ .claude/downtime/skills 间移动文件夹）。
+#[tauri::command]
+fn set_skill_enabled(project_dir: String, dir: String, enabled: bool) -> Result<(), String> {
+    catalog::set_skill_enabled(&project_dir, &dir, enabled)
+}
+
+/// M8：应用模板（dirs 全上架、其余全下架）；返回单项失败的 warnings（整体不报错）。
+#[tauri::command]
+fn apply_skill_template(project_dir: String, dirs: Vec<String>) -> Result<Vec<String>, String> {
+    Ok(catalog::apply_skill_template(&project_dir, &dirs))
+}
+
+/// M8：列某目录的直接子项（文件树懒加载，一层）。
+#[tauri::command]
+fn list_dir(path: String) -> Result<Vec<fs_tree::DirEntry>, String> {
+    fs_tree::list_dir(&path)
 }
 
 /// M7-A：返回本地 MCP broker 的端点 URL（agent 的 .mcp.json 指向它）。
@@ -208,6 +233,10 @@ pub fn run() {
             list_project_skills,
             list_memories,
             list_projects,
+            list_managed_skills,
+            set_skill_enabled,
+            apply_skill_template,
+            list_dir,
             mcp_broker_url,
             setup_mcp_agent,
             write_agent_brief,

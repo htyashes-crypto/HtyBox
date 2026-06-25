@@ -75,7 +75,7 @@ export function launchCmdFor(
 }
 
 export interface DragItem {
-  kind: "skill" | "memory";
+  kind: "skill" | "memory" | "file";
   invoke?: string; // skill 的 /调用串
   path: string; // 文件绝对路径
 }
@@ -87,6 +87,6 @@ export function injectText(item: DragItem, agent: AgentKind): string {
     if (agent === "codex") return "@" + item.path; // codex 用文件路径
     return item.path; // 裸 shell：纯路径
   }
-  // memory
+  // memory / file：shell 用裸路径，claude/codex 用 @路径
   return agent === "shell" ? item.path : "@" + item.path;
 }

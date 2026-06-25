@@ -170,6 +170,156 @@ pub fn scan_project_skills(project_dir: &str) -> Vec<Skill> {
     out
 }
 
+// ---------------- M8：Skill 上架/下架管理（工作区级） ----------------
+// 上架 = 文件夹在 <pd>/.claude/skills/<dir>；下架 = 移到 <pd>/.claude/downtime/skills/<dir>。
+// 标识统一用文件夹名 `dir`（稳定），不用可能与文件夹名不一致的 frontmatter name。
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ManagedSkill {
+    pub name: String,
+    pub description: String,
+    /// 文件夹名 = 稳定标识（移动/模板都用它）
+    pub dir: String,
+    /// 调用串 `/name`
+    pub invoke: String,
+    /// SKILL.md 绝对路径（上架后拖拽注入用）
+    pub path: String,
+    /// true=在 .claude/skills；false=在 .claude/downtime/skills
+    pub enabled: bool,
+}
+
+/// 解析一个 skill 文件夹为 ManagedSkill；无 SKILL.md 则返回 None。
+fn parse_managed_skill(skill_dir: &Path, enabled: bool) -> Option<ManagedSkill> {
+    let skill_md = skill_dir.join("SKILL.md");
+    if !skill_md.is_file() {
+        return None;
+    }
+    let dir = skill_dir.file_name().and_then(|n| n.to_str())?.to_string();
+    let content = std::fs::read_to_string(&skill_md).ok()?;
+    let fm = parse_frontmatter(&content);
+    let name = fm
+        .as_ref()
+        .and_then(|v| str_field(v, "name"))
+        .unwrap_or_else(|| dir.clone());
+    let description = fm
+        .as_ref()
+        .and_then(|v| str_field(v, "description"))
+        .unwrap_or_default();
+    let invoke = format!("/{name}");
+    Some(ManagedSkill {
+        name,
+        description,
+        dir,
+        invoke,
+        path: skill_md.to_string_lossy().into_owned(),
+        enabled,
+    })
+}
+
+/// 扫某根目录下每个含 SKILL.md 的一级子目录。
+fn scan_managed_dir(root: &Path, enabled: bool, out: &mut Vec<ManagedSkill>) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            if let Some(s) = parse_managed_skill(&p, enabled) {
+                out.push(s);
+            }
+        }
+    }
+}
+
+/// 返回某根目录下的一级子目录名列表（用于 apply 计算当前已上架集合）。
+fn skill_dir_names(root: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(root) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if let Some(n) = p.file_name().and_then(|s| s.to_str()) {
+                    out.push(n.to_string());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// 扫工作区级 上架(.claude/skills) + 下架(.claude/downtime/skills) 的全部 skill。
+pub fn scan_managed_skills(project_dir: &str) -> Vec<ManagedSkill> {
+    let mut out = Vec::new();
+    if !project_dir.is_empty() {
+        let base = Path::new(project_dir).join(".claude");
+        scan_managed_dir(&base.join("skills"), true, &mut out);
+        scan_managed_dir(&base.join("downtime").join("skills"), false, &mut out);
+    }
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out
+}
+
+/// 校验文件夹名安全（防路径越界）。
+fn sanitize_dir(dir: &str) -> Result<(), String> {
+    if dir.is_empty() || dir.contains('/') || dir.contains('\\') || dir.contains("..") {
+        return Err(format!("非法 skill 目录名：{dir}"));
+    }
+    Ok(())
+}
+
+/// 上架/下架一个 skill 文件夹（同卷原子 rename）。
+pub fn set_skill_enabled(project_dir: &str, dir: &str, enabled: bool) -> Result<(), String> {
+    sanitize_dir(dir)?;
+    let base = Path::new(project_dir).join(".claude");
+    let active = base.join("skills").join(dir);
+    let down = base.join("downtime").join("skills").join(dir);
+    let (from, to) = if enabled { (&down, &active) } else { (&active, &down) };
+    if !from.is_dir() {
+        return Err(format!("源目录不存在：{}", from.display()));
+    }
+    if to.exists() {
+        return Err(format!("目标已存在，未覆盖：{}", to.display()));
+    }
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::rename(from, to).map_err(|e| e.to_string())
+}
+
+/// 应用模板：目标 dirs 全上架、其余全下架。单项失败不中断，收集为 warnings 返回。
+pub fn apply_skill_template(project_dir: &str, dirs: &[String]) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let mut target: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for d in dirs {
+        match sanitize_dir(d) {
+            Ok(()) => {
+                target.insert(d.clone());
+            }
+            Err(e) => warnings.push(e),
+        }
+    }
+    let base = Path::new(project_dir).join(".claude");
+    let current = skill_dir_names(&base.join("skills"));
+    // 下架：当前已上架但不在目标
+    for d in &current {
+        if !target.contains(d) {
+            if let Err(e) = set_skill_enabled(project_dir, d, false) {
+                warnings.push(format!("下架 {d} 失败：{e}"));
+            }
+        }
+    }
+    // 上架：目标里但当前未上架
+    for d in &target {
+        if !current.contains(d) {
+            if let Err(e) = set_skill_enabled(project_dir, d, true) {
+                warnings.push(format!("上架 {d} 失败：{e}"));
+            }
+        }
+    }
+    warnings
+}
+
 // ---------------- Memory ----------------
 
 fn projects_root() -> Option<PathBuf> {

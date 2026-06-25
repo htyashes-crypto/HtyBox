@@ -1,11 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import { listProjectSkills, type Skill } from "../catalog";
+import { listen } from "@tauri-apps/api/event";
+import {
+  listManagedSkills,
+  setSkillEnabled,
+  applySkillTemplate,
+  type ManagedSkill,
+} from "../catalog";
+import {
+  loadTemplates,
+  loadActiveTemplate,
+  saveActiveTemplate,
+  type SkillTemplate,
+} from "../skillTemplates";
 import SearchBox from "./ui/SearchBox";
 import InfoCard from "./ui/InfoCard";
+import SkillTemplateModal from "./SkillTemplateModal";
+import TemplatePicker from "./TemplatePicker";
 import { useSettings } from "../settings";
-import { listen } from "@tauri-apps/api/event";
 
-// 收藏的 skill 按工作区(projectDir)持久化：{ [projectDir]: skill 名数组 }
+// 收藏按 skill 文件夹名(dir，稳定)持久化：{ [projectDir]: dir[] }
 const FAV_KEY = "htybox.favSkills.v1";
 function loadFavs(projectDir: string): string[] {
   try {
@@ -15,33 +28,40 @@ function loadFavs(projectDir: string): string[] {
     return [];
   }
 }
-function saveFavs(projectDir: string, names: string[]): void {
+function saveFavs(projectDir: string, dirs: string[]): void {
   try {
     const all = JSON.parse(localStorage.getItem(FAV_KEY) || "{}");
-    all[projectDir] = names;
+    all[projectDir] = dirs;
     localStorage.setItem(FAV_KEY, JSON.stringify(all));
   } catch {
     /* ignore */
   }
 }
 
-/** 只显示当前工作区文件夹自己的 skill（<dir>/.claude/skills）；卡片只显名+爱心，详情走悬浮浮层。 */
+/** Skill 面板：上架/下架管理 + 集合模板（工作区级）。卡片只显名+动作，详情走悬浮浮层。 */
 export default function SkillPanel({ projectDir }: { projectDir: string }) {
-  const [skills, setSkills] = useState<Skill[]>([]);
+  const [skills, setSkills] = useState<ManagedSkill[]>([]);
   const [q, setQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null); // 应用模板的 warnings 提示
   const [favs, setFavs] = useState<string[]>(() => loadFavs(projectDir));
+  const [templates, setTemplates] = useState<SkillTemplate[]>(() => loadTemplates(projectDir));
+  const [activeId, setActiveId] = useState<string | null>(() => loadActiveTemplate(projectDir));
+  const [showTpl, setShowTpl] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
   const { hoverPreview } = useSettings();
+
+  const reload = () =>
+    listManagedSkills(projectDir).then(setSkills).catch((e) => setErr(String(e)));
 
   useEffect(() => {
     let un: (() => void) | undefined;
     let disposed = false;
-    const reload = () =>
-      listProjectSkills(projectDir)
-        .then(setSkills)
-        .catch((e) => setErr(String(e)));
+    setErr(null);
     reload();
-    setFavs(loadFavs(projectDir)); // 切工作区时切换收藏集
+    setFavs(loadFavs(projectDir));
+    setTemplates(loadTemplates(projectDir));
+    setActiveId(loadActiveTemplate(projectDir));
     listen("skills-changed", reload).then((u) => {
       if (disposed) u();
       else un = u;
@@ -50,38 +70,91 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
       disposed = true;
       un?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectDir]);
 
-  const toggleFav = (name: string) =>
+  const toggleFav = (dir: string) =>
     setFavs((prev) => {
-      const next = prev.includes(name)
-        ? prev.filter((n) => n !== name)
-        : [...prev, name];
+      const next = prev.includes(dir) ? prev.filter((d) => d !== dir) : [...prev, dir];
       saveFavs(projectDir, next);
       return next;
     });
 
-  const favSet = useMemo(() => new Set(favs), [favs]);
+  // 单个上架/下架 → 操作后重载；集合已偏离模板 → 清空 active 标记（自定义态）
+  const toggleEnabled = async (s: ManagedSkill) => {
+    try {
+      await setSkillEnabled(projectDir, s.dir, !s.enabled);
+      setActiveId(null);
+      saveActiveTemplate(projectDir, null);
+      reload();
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
 
-  const list = useMemo(() => {
+  // 应用模板：模板内全上架、其余全下架
+  const applyTpl = async (t: SkillTemplate) => {
+    setNote(null);
+    try {
+      const warnings = await applySkillTemplate(projectDir, t.skillDirs);
+      setActiveId(t.id);
+      saveActiveTemplate(projectDir, t.id);
+      reload();
+      if (warnings.length)
+        setNote(`已应用「${t.name}」，但 ${warnings.length} 项未处理：${warnings.join("；")}`);
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
+
+  const favSet = useMemo(() => new Set(favs), [favs]);
+  const filtered = useMemo(() => {
     const k = q.trim().toLowerCase();
     if (!k) return skills;
     return skills.filter(
-      (s) =>
-        s.name.toLowerCase().includes(k) ||
-        s.description.toLowerCase().includes(k),
+      (s) => s.name.toLowerCase().includes(k) || s.description.toLowerCase().includes(k),
     );
   }, [skills, q]);
+  const enabled = filtered.filter((s) => s.enabled);
+  const disabled = filtered.filter((s) => !s.enabled);
+  const favEnabled = enabled.filter((s) => favSet.has(s.dir));
+  const restEnabled = enabled.filter((s) => !favSet.has(s.dir));
 
-  const favList = list.filter((s) => favSet.has(s.name));
-  const restList = list.filter((s) => !favSet.has(s.name));
-
-  const renderCard = (s: Skill) => (
+  const enableBtn = (s: ManagedSkill) => (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        toggleEnabled(s);
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      title={s.enabled ? "下架（移出 .claude/skills）" : "上架（移回 .claude/skills）"}
+      className={
+        "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold " +
+        (s.enabled
+          ? "text-[#a8a29a] hover:bg-[#f4f3ee] hover:text-[#d6453e]"
+          : "bg-[#d97757] text-white hover:bg-[#c15f3c]")
+      }
+    >
+      {s.enabled ? "下架" : "上架"}
+    </button>
+  );
+  const preview = (s: ManagedSkill) => (
+    <>
+      <div className="text-[13px] font-semibold text-[#191919]">{s.name}</div>
+      <div className="mt-0.5 font-mono text-[10.5px] text-[#c15f3c]">{s.invoke}</div>
+      <div className="mt-1.5 text-[11px] leading-relaxed text-[#73726c]">
+        {s.description || "（无描述）"}
+      </div>
+    </>
+  );
+  // 单张已上架卡片（收藏区 / 已上架区共用，避免重复）
+  const enabledCard = (s: ManagedSkill) => (
     <InfoCard
       key={s.path}
       name={s.name}
       hoverEnabled={hoverPreview}
-      favorite={{ active: favSet.has(s.name), onToggle: () => toggleFav(s.name) }}
+      favorite={{ active: favSet.has(s.dir), onToggle: () => toggleFav(s.dir) }}
+      trailing={enableBtn(s)}
       onDragStart={(e) => {
         e.dataTransfer.setData(
           "application/x-htybox-item",
@@ -89,32 +162,72 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
         );
         e.dataTransfer.effectAllowed = "copy";
       }}
-      preview={
-        <>
-          <div className="text-[13px] font-semibold text-[#191919]">
-            {s.name}
-          </div>
-          <div className="mt-0.5 font-mono text-[10.5px] text-[#c15f3c]">
-            {s.invoke}
-          </div>
-          <div className="mt-1.5 text-[11px] leading-relaxed text-[#73726c]">
-            {s.description || "（无描述）"}
-          </div>
-        </>
-      }
+      preview={preview(s)}
     />
   );
 
+  const activeTpl = templates.find((t) => t.id === activeId) ?? null;
+
   return (
     <div className="flex h-full flex-col bg-[#f4f3ee]">
-      <div className="px-2.5 pt-1 pb-2">
+      {/* 模板栏：只显示当前模板，点击打开切换弹窗；⚙ 管理 */}
+      <div className="flex items-center gap-1 px-2.5 pt-1.5 pb-1">
+        <button
+          onClick={() => setShowPicker(true)}
+          title="切换模板"
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-[#ecebe2] px-3 py-1 text-[11px] font-semibold text-[#3a3a37] hover:bg-[#e3e1d6]"
+        >
+          <svg
+            className="h-3 w-3 shrink-0 text-[#d97757]"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4 6h16M4 12h16M4 18h10" />
+          </svg>
+          <span className="min-w-0 flex-1 truncate text-left">
+            {activeTpl ? activeTpl.name || "（未命名）" : "未选择模板"}
+          </span>
+          <svg
+            className="h-3 w-3 shrink-0 text-[#a8a29a]"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+        <button
+          onClick={() => setShowTpl(true)}
+          title="管理模板"
+          className="shrink-0 rounded-md px-1.5 py-0.5 text-[13px] text-[#73726c] hover:bg-[#ecebe2] hover:text-[#191919]"
+        >
+          ⚙
+        </button>
+      </div>
+      <div className="px-2.5 pb-2">
         <SearchBox value={q} onChange={setQ} placeholder="搜索本工作区 skill…" />
       </div>
+      {note && (
+        <div className="mx-2.5 mb-1.5 flex items-start gap-2 rounded-md border border-[#e8c8bb] bg-[#fdf6f2] px-2 py-1.5">
+          <span className="text-[10.5px] leading-relaxed text-[#a05a3a]">{note}</span>
+          <button
+            onClick={() => setNote(null)}
+            className="ml-auto shrink-0 text-[10px] text-[#a8a29a] hover:text-[#191919]"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
-        {err && (
-          <div className="px-1 text-[11px] text-[#d6453e]">加载失败：{err}</div>
-        )}
-        {!err && list.length === 0 && (
+        {err && <div className="px-1 text-[11px] text-[#d6453e]">加载失败：{err}</div>}
+        {!err && skills.length === 0 && (
           <div className="px-1 pt-6 text-center text-[11px] leading-relaxed text-[#a8a29a]">
             本工作区没有 skill
             <br />
@@ -123,28 +236,63 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
             </span>
           </div>
         )}
-
-        {/* 收藏区：为空则隐藏 */}
-        {favList.length > 0 && (
+        {/* 收藏（已上架中被收藏的，单独成区，带 ❤ 标题 + 分隔线） */}
+        {favEnabled.length > 0 && (
           <div className="mb-2">
             <div className="flex items-center gap-1.5 px-1 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[#a8a29a] uppercase">
-              <svg
-                className="h-3 w-3 text-[#d97757]"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
+              <svg className="h-3 w-3 text-[#d97757]" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
               </svg>
-              收藏
+              收藏 · {favEnabled.length}
             </div>
-            <div className="space-y-1.5">{favList.map(renderCard)}</div>
+            <div className="space-y-1.5">{favEnabled.map(enabledCard)}</div>
             <div className="my-2.5 border-t border-[#e5e2d9]" />
           </div>
         )}
-
-        {/* 全部 skill（已收藏的上移到收藏区，不重复显示） */}
-        <div className="space-y-1.5">{restList.map(renderCard)}</div>
+        {restEnabled.length > 0 && (
+          <div className="mb-1.5 px-1 pt-1 text-[10px] font-semibold tracking-wider text-[#a8a29a] uppercase">
+            已上架 · {restEnabled.length}
+          </div>
+        )}
+        <div className="space-y-1.5">{restEnabled.map(enabledCard)}</div>
+        {disabled.length > 0 && (
+          <>
+            <div className="mt-3 mb-1.5 px-1 text-[10px] font-semibold tracking-wider text-[#a8a29a] uppercase">
+              已下架 · {disabled.length}
+            </div>
+            <div className="space-y-1.5">
+              {disabled.map((s) => (
+                <InfoCard
+                  key={s.path}
+                  name={s.name}
+                  hoverEnabled={hoverPreview}
+                  dimmed
+                  trailing={enableBtn(s)}
+                  preview={preview(s)}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
+      {showTpl && (
+        <SkillTemplateModal
+          projectDir={projectDir}
+          skills={skills}
+          templates={templates}
+          onClose={() => setShowTpl(false)}
+          onChange={(list) => setTemplates(list)}
+        />
+      )}
+      {showPicker && (
+        <TemplatePicker
+          templates={templates}
+          activeId={activeId}
+          onPick={(t) => applyTpl(t)}
+          onManage={() => setShowTpl(true)}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
     </div>
   );
 }

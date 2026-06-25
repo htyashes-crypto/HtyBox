@@ -28,12 +28,18 @@ export default function InfoCard({
   hoverEnabled,
   onDragStart,
   favorite,
+  trailing,
+  dimmed,
 }: {
   name: string;
   preview: ReactNode;
   hoverEnabled: boolean;
-  onDragStart: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
   favorite?: { active: boolean; onToggle: () => void };
+  /** 名称右侧、收藏心形左侧的动作槽（如上架/下架按钮） */
+  trailing?: ReactNode;
+  /** 置灰（下架 skill 视觉弱化） */
+  dimmed?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const timer = useRef<number | undefined>(undefined);
@@ -63,19 +69,28 @@ export default function InfoCard({
     <>
       <div
         ref={ref}
-        draggable
-        onDragStart={(e) => {
-          hide();
-          onDragStart(e);
-        }}
+        draggable={!!onDragStart}
+        onDragStart={
+          onDragStart
+            ? (e) => {
+                hide();
+                onDragStart(e);
+              }
+            : undefined
+        }
         onMouseEnter={show}
         onMouseLeave={hide}
         onMouseDown={hide}
-        className="flex cursor-grab items-center gap-2 rounded-lg border border-[#e5e2d9] bg-white px-3 py-2 transition-colors hover:border-[#d4a27f] hover:bg-[#fbfaf7] active:cursor-grabbing"
+        className={
+          "flex items-center gap-2 rounded-lg border border-[#e5e2d9] bg-white px-3 py-2 transition-colors hover:border-[#d4a27f] hover:bg-[#fbfaf7] " +
+          (onDragStart ? "cursor-grab active:cursor-grabbing " : "") +
+          (dimmed ? "opacity-55" : "")
+        }
       >
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-[#191919]">
           {name}
         </span>
+        {trailing}
         {favorite && (
           <button
             onClick={(e) => {

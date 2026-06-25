@@ -1,8 +1,9 @@
 import { useState, type ReactElement } from "react";
 import SkillPanel from "./SkillPanel";
 import MemoryPanel from "./MemoryPanel";
+import FilePanel from "./FilePanel";
 
-type Tab = "skill" | "memory";
+type Tab = "skill" | "memory" | "file";
 
 function SkillIcon() {
   return (
@@ -35,7 +36,25 @@ function MemoryIcon() {
   );
 }
 
+function FileTreeIcon() {
+  return (
+    <svg
+      className="h-3.5 w-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  );
+}
+
 const TABS: { id: Tab; label: string; icon: () => ReactElement }[] = [
+  { id: "file", label: "File", icon: FileTreeIcon },
   { id: "skill", label: "Skill", icon: SkillIcon },
   { id: "memory", label: "Memory", icon: MemoryIcon },
 ];
@@ -78,8 +97,10 @@ export default function Sidebar({
       <div className="min-h-0 flex-1">
         {tab === "skill" ? (
           <SkillPanel projectDir={workspacePath} />
-        ) : (
+        ) : tab === "memory" ? (
           <MemoryPanel slug={workspaceSlug} />
+        ) : (
+          <FilePanel root={workspacePath} />
         )}
       </div>
     </div>
