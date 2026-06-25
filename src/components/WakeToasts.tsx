@@ -3,7 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   onAgentWake,
   onAgentLoop,
+  onTerminalExit,
   getAgentTerminal,
+  getTermAgent,
+  wasIntentionallyClosed,
   relayAllow,
   relayStop,
   relayResume,
@@ -26,7 +29,24 @@ export default function WakeToasts() {
   const { autoRelay } = useSettings();
   const [wakes, setWakes] = useState<AgentWake[]>([]); // 待手动唤醒
   const [loopWarn, setLoopWarn] = useState<string | null>(null); // 死循环告警
+  const [downs, setDowns] = useState<{ termId: string; roleName: string }[]>([]); // 崩溃/退出
   const [, setTick] = useState(0); // 触发重渲染以刷新用量显示
+
+  // 终端退出检测（M7-H 可见性）：排除用户主动关闭，仅对 agent 终端提示
+  useEffect(() => {
+    const un = onTerminalExit((termId) => {
+      if (wasIntentionallyClosed(termId)) return;
+      const info = getTermAgent(termId);
+      if (!info) return;
+      setDowns((cur) => [
+        ...cur.filter((x) => x.termId !== termId),
+        { termId, roleName: info.roleName },
+      ]);
+    });
+    return () => {
+      un.then((f) => f()).catch(() => {});
+    };
+  }, []);
 
   // 死循环：broker 检测到同内容空转 → 停自动接力并告警（护栏）
   useEffect(() => {
@@ -72,9 +92,23 @@ export default function WakeToasts() {
   const usage = relayUsage();
   const showRelayBar = autoRelay && (usage.count > 0 || usage.stopped);
 
-  if (!wakes.length && !showRelayBar && !loopWarn) return null;
+  if (!wakes.length && !showRelayBar && !loopWarn && !downs.length) return null;
   return (
     <div className="fixed right-4 top-14 z-[90] flex w-72 flex-col gap-2">
+      {downs.map((d) => (
+        <div
+          key={d.termId}
+          className="flex items-start gap-2 rounded-lg border border-[#d6453e]/40 bg-[#fdf3f2] px-3 py-2 shadow-lg"
+        >
+          <span className="text-xs text-[#d6453e]">⚠ {d.roleName} 终端已退出</span>
+          <button
+            onClick={() => setDowns((cur) => cur.filter((x) => x.termId !== d.termId))}
+            className="ml-auto shrink-0 rounded px-1.5 text-xs text-[#a8a29a] hover:text-[#191919]"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
       {loopWarn && (
         <div className="flex items-start gap-2 rounded-lg border border-[#d6453e]/40 bg-[#fdf3f2] px-3 py-2 shadow-lg">
           <span className="text-xs text-[#d6453e]">⚠ {loopWarn}</span>

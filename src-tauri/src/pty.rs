@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Deserialize;
 use tauri::ipc::Channel;
+use tauri::{AppHandle, Emitter};
 
 pub type TermId = String;
 
@@ -34,9 +35,15 @@ struct PtySession {
 #[derive(Default)]
 pub struct PtyManager {
     sessions: Mutex<HashMap<TermId, PtySession>>,
+    app: Mutex<Option<AppHandle>>, // setup 后注入：子进程退出时 emit "terminal-exit"(崩溃自愈检测)
 }
 
 impl PtyManager {
+    /// setup 后注入 AppHandle，使 reader 线程能在子进程退出时通知前端。
+    pub fn set_app(&self, app: AppHandle) {
+        *self.app.lock().unwrap() = Some(app);
+    }
+
     /// 起一个 PTY 子进程，并在后台线程把输出推给 `on_output`。
     pub fn spawn(
         &self,
@@ -89,17 +96,23 @@ impl PtyManager {
             .map_err(|e| format!("take writer: {e}"))?;
 
         // 后台读线程：按块原样把字节转发到前端（xterm 自己处理半截 UTF-8）。
+        let exit_app = self.app.lock().unwrap().clone();
+        let exit_id = id.clone();
         std::thread::spawn(move || {
             let mut buf = [0u8; 8192];
             loop {
                 match reader.read(&mut buf) {
-                    Ok(0) | Err(_) => break, // EOF 或读错误 → 进程结束
+                    Ok(0) | Err(_) => break, // EOF 或读错误 → 子进程结束
                     Ok(n) => {
                         if on_output.send(buf[..n].to_vec()).is_err() {
-                            break; // 前端通道已关闭
+                            return; // 前端通道关闭(刷新等) → 非崩溃，不发退出事件
                         }
                     }
                 }
+            }
+            // 子进程退出 → 通知前端(崩溃自愈检测)；用户主动关闭由前端按"已知关闭"排除
+            if let Some(app) = exit_app {
+                let _ = app.emit("terminal-exit", &exit_id);
             }
         });
 

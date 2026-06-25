@@ -31,7 +31,8 @@ import codexIcon from "../assets/codex.svg";
 import {
   setupMcpAgent,
   registerAgentLauncher,
-  setAgentTerminal,
+  registerAgentTerminal,
+  markTerminalClosed,
   writeAgentBrief,
   type AgentSpec,
 } from "../mcp";
@@ -354,6 +355,7 @@ export default function TerminalDock({
       api.onDidRemovePanel((panel) => {
         const termId = (panel.params as TermParams | undefined)?.termId;
         if (!termId) return;
+        markTerminalClosed(termId); // M7-H：主动关闭 → 其 PTY 退出事件不当崩溃
         // 工作区关闭中：引擎已由 disposeByPrefix 统一结束，且要保留布局/自定义名供复原 → 跳过
         if (CLOSING.has(workspaceId)) return;
         disposeEngine(termId);
@@ -450,7 +452,17 @@ export default function TerminalDock({
         const label = (spec.role === "lead" ? "👑 " : "🔧 ") + spec.roleName;
         AGENT_LABELS[id] = label;
         saveAL();
-        setAgentTerminal(spec.agentId, id); // M7-B：供唤醒时定位终端注入
+        // M7-B 唤醒定位 + M7-H 崩溃替补：登记该终端的完整身份
+        registerAgentTerminal(id, {
+          agentId: spec.agentId,
+          roleName: spec.roleName,
+          role: spec.role,
+          agentKind: spec.agentKind,
+          model: spec.model,
+          responsibility: spec.responsibility,
+          cwd,
+          workspaceId,
+        });
         // M7-C：写协作简报（角色/职责/协议/花名册），启动用位置 prompt 让它先读 → 自己按协议协作
         try {
           await writeAgentBrief({

@@ -132,6 +132,40 @@ export function getAgentTerminal(agentId: string): string | undefined {
   return agentTerminals.get(agentId);
 }
 
+// ---- M7-H：每 agent 终端的完整身份（崩溃自愈替补用）----
+export interface TermAgentInfo {
+  agentId: string;
+  roleName: string;
+  role: AgentRole;
+  agentKind: "claude" | "codex";
+  model?: string;
+  responsibility?: string;
+  cwd: string;
+  workspaceId: string;
+}
+const termAgents = new Map<string, TermAgentInfo>();
+const intentionallyClosed = new Set<string>(); // 用户主动关闭的终端 → 退出事件不当崩溃
+
+export function registerAgentTerminal(termId: string, info: TermAgentInfo): void {
+  termAgents.set(termId, info);
+  agentTerminals.set(info.agentId, termId);
+  intentionallyClosed.delete(termId); // 复用 termId 时清旧标记
+}
+export function getTermAgent(termId: string): TermAgentInfo | undefined {
+  return termAgents.get(termId);
+}
+export function markTerminalClosed(termId: string): void {
+  intentionallyClosed.add(termId);
+}
+export function wasIntentionallyClosed(termId: string): boolean {
+  return intentionallyClosed.has(termId);
+}
+
+/** M7-H：监听 broker(实为 pty) 的 "terminal-exit"（子进程退出，payload=termId）。 */
+export function onTerminalExit(fn: (termId: string) => void): Promise<UnlistenFn> {
+  return listen<string>("terminal-exit", (e) => fn(e.payload));
+}
+
 // ---- M7-B：唤醒事件（broker 在某挂起 agent 收到新消息时 emit "agent-wake"）----
 export interface AgentWake {
   agentId: string;

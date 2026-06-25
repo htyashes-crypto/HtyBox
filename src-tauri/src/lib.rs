@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use pty::{PtyManager, SpawnOptions};
 use tauri::ipc::Channel;
-use tauri::State;
+use tauri::{Manager, State};
 
 struct AppState {
     pty: PtyManager,
@@ -190,6 +190,7 @@ pub fn run() {
         .setup(move |app| {
             watcher::start(app.handle().clone());
             broker_for_setup.set_app(app.handle().clone()); // M7-B：broker 可发 "agent-wake" 事件
+            app.state::<AppState>().pty.set_app(app.handle().clone()); // M7-H：子进程退出 emit "terminal-exit"
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
