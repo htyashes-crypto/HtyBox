@@ -33,6 +33,7 @@ interface Engine {
   lastCols?: number; // 上次发给 PTY 的尺寸；去重避免多余 SIGWINCH 把运行中的 TUI 画花
   lastRows?: number;
   fitTimer?: number; // 防抖句柄：合并连续尺寸变化（挂载布局抖动 / 拖动分屏），稳定后只 fit 一次
+  lastOutputAt?: number; // 最近一次收到 PTY 输出的时间戳（M7-D：静默=回合物理结束、可安全注入）
 }
 
 const engines = new Map<string, Engine>();
@@ -165,7 +166,10 @@ function createPty(termId: string): void {
   e.lastRows = rows;
 
   const onOutput = new Channel<number[]>();
-  onOutput.onmessage = (bytes) => e.term.write(new Uint8Array(bytes));
+  onOutput.onmessage = (bytes) => {
+    e.lastOutputAt = Date.now(); // 记录输出时刻 → 供 M7-D 静默检测(物理确认)
+    e.term.write(new Uint8Array(bytes));
+  };
 
   invoke("create_terminal", {
     id: termId,
@@ -287,6 +291,31 @@ export function disposeEngine(termId: string): void {
 /** 让某终端获得键盘焦点（拖拽注入后调用）。 */
 export function focusEngine(termId: string): void {
   engines.get(termId)?.term.focus();
+}
+
+/**
+ * M7-D 全自动接力：等该终端静默(回合物理结束)后再向 PTY 注入 data，避免打断运行中的 TUI 撕裂画面。
+ * 轮询直到静默 ≥ quietMs，或超过 timeoutMs 兜底注入；终端已不存在则放弃。
+ */
+export function autoInjectWhenQuiet(
+  termId: string,
+  data: string,
+  opts?: { quietMs?: number; timeoutMs?: number },
+): void {
+  const quietNeed = opts?.quietMs ?? 1000;
+  const deadline = Date.now() + (opts?.timeoutMs ?? 6000);
+  const tick = () => {
+    const e = engines.get(termId);
+    if (!e || !e.created) return; // 终端没了 → 放弃
+    const quiet = Date.now() - (e.lastOutputAt ?? 0);
+    if (quiet >= quietNeed || Date.now() >= deadline) {
+      invoke("write_terminal", { id: termId, data }).catch(() => {});
+      e.term.focus();
+      return;
+    }
+    window.setTimeout(tick, 300);
+  };
+  tick();
 }
 
 /** 注册/清除"终端标题变化"回调（Tab 自动命名用）。 */

@@ -48,8 +48,36 @@ export function registerAgentLauncher(workspaceId: string, fn: Launcher): () => 
 export function launchAgents(workspaceId: string, specs: AgentSpec[]): boolean {
   const fn = launchers.get(workspaceId);
   if (!fn) return false;
+  resetRelay(); // M7-D：新一轮团队运行 → 重置全自动接力预算/急停
   fn(specs);
   return true;
+}
+
+// ---- M7-D：全自动接力预算 + 急停（防失控的最低护栏）----
+let relayCount = 0;
+let relayStopped = false;
+const RELAY_CAP = 60; // 一轮运行内自动唤醒次数硬上限，触顶停自动(回退手动点击)
+export function resetRelay(): void {
+  relayCount = 0;
+  relayStopped = false;
+}
+export function relayStop(): void {
+  relayStopped = true;
+}
+export function relayResume(): void {
+  relayStopped = false;
+}
+export function relayIsStopped(): boolean {
+  return relayStopped;
+}
+/** 申请一次自动唤醒额度；false = 已急停或触顶(应回退手动)。 */
+export function relayAllow(): boolean {
+  if (relayStopped || relayCount >= RELAY_CAP) return false;
+  relayCount += 1;
+  return true;
+}
+export function relayUsage(): { count: number; cap: number; stopped: boolean } {
+  return { count: relayCount, cap: RELAY_CAP, stopped: relayStopped };
 }
 
 // ---- M7-B：agentId → termId 映射（半自动唤醒时定位要注入的终端）----

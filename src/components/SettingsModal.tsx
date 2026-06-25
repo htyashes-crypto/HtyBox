@@ -54,6 +54,19 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               onChange={(v) => setSetting("hoverPreview", v)}
             />
           </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-lg px-3 py-2.5 transition-colors hover:bg-[#f0eee6]">
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-[#191919]">多 Agent 全自动接力</div>
+              <div className="text-[11px] text-[#8c8a82]">
+                开：唤醒自动注入（终端静默后），团队无人工接力跑；关：半自动（弹提示，点击才唤醒）
+              </div>
+            </div>
+            <Toggle
+              on={s.autoRelay}
+              onChange={(v) => setSetting("autoRelay", v)}
+            />
+          </div>
         </div>
 
         <div className="mt-4 border-t border-[#e5e2d9] pt-3 text-[10px] text-[#a8a29a]">

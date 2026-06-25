@@ -1,25 +1,46 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { onAgentWake, getAgentTerminal, type AgentWake } from "../mcp";
-import { focusEngine } from "./terminalEngine";
+import {
+  onAgentWake,
+  getAgentTerminal,
+  relayAllow,
+  relayStop,
+  relayResume,
+  relayUsage,
+  type AgentWake,
+} from "../mcp";
+import { autoInjectWhenQuiet, focusEngine } from "./terminalEngine";
+import { useSettings } from "../settings";
+
+// 唤醒注入语：让被唤醒的 agent 取消息后按协议继续。
+const NUDGE = "（HtyBox）你有新消息，请调用 read_inbox 查看后继续。\r";
 
 /**
- * M7-B 半自动唤醒：监听 broker 的 "agent-wake"（某挂起 agent 收到新消息）。
- * 用户点「唤醒」→ 向该 agent 的终端 PTY 注入提示，让其 read_inbox 后继续。
- * （物理确认/自动唤醒属 M7-B 后续：Stop hook / codex 静默 + M7-D 全自动）
+ * M7-D 唤醒派发：监听 broker 的 "agent-wake"。
+ * - 全自动(设置 autoRelay 开)：终端静默(物理确认)后自动注入，无需点击；受急停 + 次数上限护栏约束。
+ * - 半自动(默认)：弹提示，用户点「唤醒」才注入。急停/触顶时全自动回退到半自动提示。
  */
 export default function WakeToasts() {
-  const [wakes, setWakes] = useState<AgentWake[]>([]);
+  const { autoRelay } = useSettings();
+  const [wakes, setWakes] = useState<AgentWake[]>([]); // 待手动唤醒
+  const [, setTick] = useState(0); // 触发重渲染以刷新用量显示
 
   useEffect(() => {
-    const un = onAgentWake((w) =>
-      // 同一 agent 多条消息只保留最新一条提示
-      setWakes((cur) => [...cur.filter((x) => x.agentId !== w.agentId), w]),
-    );
+    const un = onAgentWake((w) => {
+      const termId = getAgentTerminal(w.agentId);
+      // 全自动且仍有额度：静默后自动注入，不打扰用户
+      if (autoRelay && termId && relayAllow()) {
+        autoInjectWhenQuiet(termId, NUDGE);
+        setTick((n) => n + 1);
+        return;
+      }
+      // 半自动 / 已急停 / 触顶 → 弹提示让用户点击（同一 agent 只留最新一条）
+      setWakes((cur) => [...cur.filter((x) => x.agentId !== w.agentId), w]);
+    });
     return () => {
       un.then((f) => f()).catch(() => {});
     };
-  }, []);
+  }, [autoRelay]);
 
   const dismiss = (agentId: string) =>
     setWakes((cur) => cur.filter((x) => x.agentId !== agentId));
@@ -27,18 +48,46 @@ export default function WakeToasts() {
   const wake = (w: AgentWake) => {
     const termId = getAgentTerminal(w.agentId);
     if (termId) {
-      invoke("write_terminal", {
-        id: termId,
-        data: "（HtyBox）你有新消息，请调用 read_inbox 查看后继续。\r",
-      }).catch(() => {});
+      invoke("write_terminal", { id: termId, data: NUDGE }).catch(() => {});
       focusEngine(termId);
     }
     dismiss(w.agentId);
   };
 
-  if (!wakes.length) return null;
+  const usage = relayUsage();
+  const showRelayBar = autoRelay && (usage.count > 0 || usage.stopped);
+
+  if (!wakes.length && !showRelayBar) return null;
   return (
     <div className="fixed right-4 top-14 z-[90] flex w-72 flex-col gap-2">
+      {showRelayBar && (
+        <div className="flex items-center gap-2 rounded-lg border border-[#e5e2d9] bg-white px-3 py-2 shadow-lg">
+          <span className="text-xs text-[#73726c]">
+            {usage.stopped ? "⏸ 全自动已急停" : "⚡ 全自动接力中"} · {usage.count}/{usage.cap}
+          </span>
+          {usage.stopped ? (
+            <button
+              onClick={() => {
+                relayResume();
+                setTick((n) => n + 1);
+              }}
+              className="ml-auto rounded-md bg-[#d97757] px-2 py-0.5 text-xs font-semibold text-white hover:bg-[#c15f3c]"
+            >
+              恢复
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                relayStop();
+                setTick((n) => n + 1);
+              }}
+              className="ml-auto rounded-md border border-[#d6453e]/40 px-2 py-0.5 text-xs font-semibold text-[#d6453e] hover:bg-[#d6453e]/10"
+            >
+              急停
+            </button>
+          )}
+        </div>
+      )}
       {wakes.map((w) => (
         <div
           key={w.agentId}

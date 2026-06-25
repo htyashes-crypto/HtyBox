@@ -4,10 +4,12 @@ import { useSyncExternalStore } from "react";
 export interface Settings {
   /** Skill/Memory 卡片鼠标悬停时弹出详情浮层 */
   hoverPreview: boolean;
+  /** M7-D 多 Agent 全自动接力：开则唤醒自动注入(终端静默后)，关则半自动(弹提示点击唤醒) */
+  autoRelay: boolean;
 }
 
 const KEY = "htybox.settings.v1";
-const DEFAULTS: Settings = { hoverPreview: true };
+const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false };
 
 function load(): Settings {
   try {
