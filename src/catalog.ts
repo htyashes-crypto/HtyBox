@@ -32,6 +32,18 @@ export const listProjectSkills = (projectDir: string) =>
 export const listMemories = (slug: string) =>
   invoke<MemoryItem[]>("list_memories", { slug });
 
+// ---- M9：记忆树（分级文件夹结构）----
+export interface MemoryNode {
+  name: string;
+  path: string;
+  isDir: boolean;
+  memType: string;
+  description: string;
+  children: MemoryNode[];
+}
+export const listMemoryTree = (slug: string) =>
+  invoke<MemoryNode[]>("list_memory_tree", { slug });
+
 export const listProjects = () => invoke<ProjectRef[]>("list_projects");
 
 // ---- M8：Skill 上架/下架管理（工作区级） ----
@@ -65,3 +77,36 @@ export interface DirEntry {
 
 /** 列某目录的直接子项。 */
 export const listDir = (path: string) => invoke<DirEntry[]>("list_dir", { path });
+
+// ---- M9：文件读写 / 增删改 ----
+export interface ReadTextResult {
+  content: string;
+  editable: boolean;
+  reason?: string;
+}
+export const readTextFile = (path: string) =>
+  invoke<ReadTextResult>("read_text_file", { path });
+export const writeTextFile = (path: string, content: string) =>
+  invoke<void>("write_text_file", { path, content });
+export const createEntry = (parentDir: string, name: string, isDir: boolean) =>
+  invoke<string>("create_entry", { parentDir, name, isDir });
+export const renameEntry = (path: string, newName: string) =>
+  invoke<string>("rename_entry", { path, newName });
+export const deleteEntry = (path: string) => invoke<void>("delete_entry", { path });
+export const moveEntry = (src: string, destDir: string) =>
+  invoke<string>("move_entry", { src, destDir });
+export const copyEntry = (src: string, destDir: string) =>
+  invoke<string>("copy_entry", { src, destDir });
+export const importDroppedFile = (destDir: string, name: string, bytes: number[]) =>
+  invoke<string>("import_dropped_file", { destDir, name, bytes });
+export const revealInExplorer = (path: string) =>
+  invoke<void>("reveal_in_explorer", { path });
+
+// ---- M9：全局文件搜索（双击 Shift）----
+export interface FileRef {
+  name: string;
+  rel: string;
+  path: string;
+}
+export const listAllFiles = (root: string, skipFolders: string[], skipExts: string[]) =>
+  invoke<FileRef[]>("list_all_files", { root, skipFolders, skipExts });

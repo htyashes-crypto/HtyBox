@@ -17,6 +17,7 @@ import InfoCard from "./ui/InfoCard";
 import SkillTemplateModal from "./SkillTemplateModal";
 import TemplatePicker from "./TemplatePicker";
 import { useSettings } from "../settings";
+import { searchMatch } from "../search";
 
 // 收藏按 skill 文件夹名(dir，稳定)持久化：{ [projectDir]: dir[] }
 const FAV_KEY = "htybox.favSkills.v1";
@@ -109,11 +110,8 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
 
   const favSet = useMemo(() => new Set(favs), [favs]);
   const filtered = useMemo(() => {
-    const k = q.trim().toLowerCase();
-    if (!k) return skills;
-    return skills.filter(
-      (s) => s.name.toLowerCase().includes(k) || s.description.toLowerCase().includes(k),
-    );
+    if (!q.trim()) return skills;
+    return skills.filter((s) => searchMatch(q, s.name, s.description));
   }, [skills, q]);
   const enabled = filtered.filter((s) => s.enabled);
   const disabled = filtered.filter((s) => !s.enabled);

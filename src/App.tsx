@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Allotment } from "allotment";
 import Sidebar from "./components/Sidebar";
 import TerminalDock, { markWorkspaceClosing } from "./components/TerminalDock";
@@ -6,6 +6,7 @@ import Welcome, { type RecentFolder } from "./components/Welcome";
 import SettingsModal from "./components/SettingsModal";
 import CollabModal from "./components/CollabModal";
 import WakeToasts from "./components/WakeToasts";
+import QuickOpen from "./components/QuickOpen";
 import { disposeByPrefix } from "./components/terminalEngine";
 import { launchAgents, type AgentSpec } from "./mcp";
 
@@ -54,6 +55,7 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showCollab, setShowCollab] = useState(false);
+  const [showQuickOpen, setShowQuickOpen] = useState(false);
   // 已挂载过的 workspace（懒挂载 + 挂载后常驻 → 切走/回欢迎页时 PTY 后台存活）
   const [opened, setOpened] = useState<Set<string>>(new Set());
 
@@ -89,6 +91,29 @@ export default function App() {
   };
 
   const active = openWs.find((w) => w.id === activeId) ?? null;
+
+  // 双击 Shift → 全局文件搜索（quick-open，仅在有活动工作区时）
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  useEffect(() => {
+    let lastShift = 0;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Shift") {
+        if (e.repeat) return;
+        const now = Date.now();
+        if (now - lastShift < 320 && activeRef.current) {
+          setShowQuickOpen(true);
+          lastShift = 0;
+        } else {
+          lastShift = now;
+        }
+      } else {
+        lastShift = 0;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div className="relative flex h-screen w-screen flex-col bg-[#faf9f5] text-[#191919]">
@@ -225,6 +250,15 @@ export default function App() {
           onLaunch={(specs: AgentSpec[]) => {
             if (active) launchAgents(active.id, specs);
           }}
+        />
+      )}
+
+      {/* M9 双击 Shift 全局文件搜索 */}
+      {showQuickOpen && active && (
+        <QuickOpen
+          root={active.path}
+          workspaceId={active.id}
+          onClose={() => setShowQuickOpen(false)}
         />
       )}
 

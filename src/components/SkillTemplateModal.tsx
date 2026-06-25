@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ManagedSkill } from "../catalog";
 import { saveTemplates, emptyTemplate, type SkillTemplate } from "../skillTemplates";
+import { searchMatch } from "../search";
 
 /** M8-C：Skill 模板管理模态。左列模板增删改、右列勾选该模板要上架的 skill（按 dir）。 */
 export default function SkillTemplateModal({
@@ -57,9 +58,8 @@ export default function SkillTemplateModal({
   };
 
   // 搜索过滤（名称/目录）；全选·全不选只作用于当前过滤结果，便于批量快速编辑
-  const k = q.trim().toLowerCase();
-  const filtered = k
-    ? skills.filter((s) => s.name.toLowerCase().includes(k) || s.dir.toLowerCase().includes(k))
+  const filtered = q.trim()
+    ? skills.filter((s) => searchMatch(q, s.name, s.dir))
     : skills;
   const setSelDirs = (dirs: string[]) => {
     if (sel) persist(list.map((t) => (t.id === sel.id ? { ...t, skillDirs: dirs } : t)));

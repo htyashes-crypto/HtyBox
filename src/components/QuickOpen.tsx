@@ -1,0 +1,92 @@
+import { useEffect, useMemo, useState } from "react";
+import { listAllFiles, type FileRef } from "../catalog";
+import { openEditor } from "../dockBus";
+import { loadIgnore } from "../fileIgnore";
+import { searchScore } from "../search";
+
+/** M9：双击 Shift 唤出的全局文件搜索（统一搜索规则，排除忽略名单，点击/回车打开）。 */
+export default function QuickOpen({
+  root,
+  workspaceId,
+  onClose,
+}: {
+  root: string;
+  workspaceId: string;
+  onClose: () => void;
+}) {
+  const [all, setAll] = useState<FileRef[]>([]);
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState(0);
+
+  useEffect(() => {
+    const ig = loadIgnore(root); // 排除被忽略的文件夹/扩展名
+    listAllFiles(root, ig.folders, ig.exts).then(setAll).catch(() => setAll([]));
+  }, [root]);
+
+  const results = useMemo(() => {
+    return all
+      .map((f) => ({ f, sc: searchScore(q, f.name, f.rel) }))
+      .filter((x) => x.sc > 0)
+      .sort((a, b) => b.sc - a.sc)
+      .slice(0, 50)
+      .map((x) => x.f);
+  }, [all, q]);
+
+  useEffect(() => setSel(0), [q]);
+
+  const open = (f: FileRef) => {
+    openEditor(workspaceId, f.path);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[130] flex items-start justify-center bg-black/20 pt-[12vh]" onClick={onClose}>
+      <div
+        className="w-[600px] max-w-[92vw] overflow-hidden rounded-xl border border-[#e5e2d9] bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") onClose();
+            else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setSel((s) => Math.min(s + 1, results.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setSel((s) => Math.max(s - 1, 0));
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              if (results[sel]) open(results[sel]);
+            }
+          }}
+          placeholder="搜索文件（按文件名）…"
+          className="w-full border-b border-[#e5e2d9] px-4 py-2.5 text-[14px] outline-none"
+        />
+        <div className="max-h-[50vh] overflow-y-auto py-1">
+          {results.length === 0 && (
+            <div className="px-4 py-6 text-center text-[12px] text-[#a8a29a]">
+              {all.length === 0 ? "正在索引…" : "无匹配文件"}
+            </div>
+          )}
+          {results.map((f, i) => (
+            <button
+              key={f.path}
+              onMouseEnter={() => setSel(i)}
+              onClick={() => open(f)}
+              className={
+                "flex w-full items-baseline gap-2 px-4 py-1.5 text-left " +
+                (i === sel ? "bg-[#d97757]/12" : "hover:bg-[#f4f3ee]")
+              }
+            >
+              <span className="shrink-0 text-[13px] text-[#191919]">{f.name}</span>
+              <span className="min-w-0 flex-1 truncate text-[11px] text-[#a8a29a]">{f.rel}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

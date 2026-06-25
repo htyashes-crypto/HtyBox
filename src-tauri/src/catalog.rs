@@ -426,3 +426,72 @@ pub fn scan_memories(slug: &str) -> Vec<MemoryItem> {
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     out
 }
+
+// ---------------- M9：记忆树（分级文件夹 + 封面索引链结构）----------------
+// 新记忆结构：memory/ 根 = MEMORY.md + 分组文件夹 index_N[_set]_<组>/；
+// topic(feedback_*/project_*/reference_*) 物理在所属组文件夹内。
+// 树视图：分组文件夹=枝、topic=叶；隐藏 MEMORY.md 与 index_*.md(封面/子域索引脚手架)。兼容旧平铺结构。
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryNode {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub mem_type: String,
+    pub description: String,
+    pub children: Vec<MemoryNode>,
+}
+
+fn build_memory_nodes(dir: &Path) -> Vec<MemoryNode> {
+    let mut out = Vec::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for e in entries.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            let children = build_memory_nodes(&p);
+            if !children.is_empty() {
+                out.push(MemoryNode {
+                    name: file_name_str(&p),
+                    path: p.to_string_lossy().into_owned(),
+                    is_dir: true,
+                    mem_type: String::new(),
+                    description: String::new(),
+                    children,
+                });
+            }
+        } else if p.extension().map(|x| x == "md").unwrap_or(false) {
+            let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            // 跳过 MEMORY.md 与 index_*.md(封面/子域索引脚手架)，只收真正的 topic
+            if fname.eq_ignore_ascii_case("MEMORY.md") || fname.starts_with("index_") {
+                continue;
+            }
+            if let Some(m) = parse_memory(&p) {
+                out.push(MemoryNode {
+                    name: m.name,
+                    path: m.path,
+                    is_dir: false,
+                    mem_type: m.mem_type,
+                    description: m.description,
+                    children: Vec::new(),
+                });
+            }
+        }
+    }
+    out.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    out
+}
+
+/// 扫某工作区记忆为树（分组文件夹 → topic）。
+pub fn scan_memory_tree(slug: &str) -> Vec<MemoryNode> {
+    let Some(root) = projects_root() else {
+        return Vec::new();
+    };
+    build_memory_nodes(&root.join(slug).join("memory"))
+}

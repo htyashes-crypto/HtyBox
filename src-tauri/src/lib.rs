@@ -60,6 +60,12 @@ fn list_memories(slug: String) -> Vec<catalog::MemoryItem> {
     catalog::scan_memories(&slug)
 }
 
+/// M9：列某工作区记忆树（分级文件夹结构；隐藏 MEMORY.md/index_* 脚手架）。
+#[tauri::command]
+fn list_memory_tree(slug: String) -> Vec<catalog::MemoryNode> {
+    catalog::scan_memory_tree(&slug)
+}
+
 #[tauri::command]
 fn list_projects() -> Vec<catalog::ProjectRef> {
     catalog::list_projects()
@@ -87,6 +93,70 @@ fn apply_skill_template(project_dir: String, dirs: Vec<String>) -> Result<Vec<St
 #[tauri::command]
 fn list_dir(path: String) -> Result<Vec<fs_tree::DirEntry>, String> {
     fs_tree::list_dir(&path)
+}
+
+/// M9：读文本文件（目录/二进制/超大 → editable=false）。
+#[tauri::command]
+fn read_text_file(path: String) -> Result<fs_tree::ReadTextResult, String> {
+    fs_tree::read_text_file(&path)
+}
+
+/// M9：保存文本文件。
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    fs_tree::write_text_file(&path, &content)
+}
+
+/// M9：新建文件/文件夹。
+#[tauri::command]
+fn create_entry(parent_dir: String, name: String, is_dir: bool) -> Result<String, String> {
+    fs_tree::create_entry(&parent_dir, &name, is_dir)
+}
+
+/// M9：同目录改名。
+#[tauri::command]
+fn rename_entry(path: String, new_name: String) -> Result<String, String> {
+    fs_tree::rename_entry(&path, &new_name)
+}
+
+/// M9：删除到回收站。
+#[tauri::command]
+fn delete_entry(path: String) -> Result<(), String> {
+    fs_tree::delete_entry(&path)
+}
+
+/// M9：移动进目标目录。
+#[tauri::command]
+fn move_entry(src: String, dest_dir: String) -> Result<String, String> {
+    fs_tree::move_entry(&src, &dest_dir)
+}
+
+/// M9：复制进目标目录。
+#[tauri::command]
+fn copy_entry(src: String, dest_dir: String) -> Result<String, String> {
+    fs_tree::copy_entry(&src, &dest_dir)
+}
+
+/// M9：写 OS 拖入文件的字节到目标目录。
+#[tauri::command]
+fn import_dropped_file(dest_dir: String, name: String, bytes: Vec<u8>) -> Result<String, String> {
+    fs_tree::import_dropped_file(&dest_dir, &name, bytes)
+}
+
+/// M9：在资源管理器中定位。
+#[tauri::command]
+fn reveal_in_explorer(path: String) -> Result<(), String> {
+    fs_tree::reveal_in_explorer(&path)
+}
+
+/// M9：递归列工作区所有文件（双击 Shift 全局搜索；排除噪声目录 + 忽略名单）。
+#[tauri::command]
+fn list_all_files(
+    root: String,
+    skip_folders: Vec<String>,
+    skip_exts: Vec<String>,
+) -> Vec<fs_tree::FileRef> {
+    fs_tree::list_all_files(&root, skip_folders, skip_exts)
 }
 
 /// M7-A：返回本地 MCP broker 的端点 URL（agent 的 .mcp.json 指向它）。
@@ -232,11 +302,22 @@ pub fn run() {
             list_skills,
             list_project_skills,
             list_memories,
+            list_memory_tree,
             list_projects,
             list_managed_skills,
             set_skill_enabled,
             apply_skill_template,
             list_dir,
+            read_text_file,
+            write_text_file,
+            create_entry,
+            rename_entry,
+            delete_entry,
+            move_entry,
+            copy_entry,
+            import_dropped_file,
+            reveal_in_explorer,
+            list_all_files,
             mcp_broker_url,
             setup_mcp_agent,
             write_agent_brief,

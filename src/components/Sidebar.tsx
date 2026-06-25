@@ -100,7 +100,7 @@ export default function Sidebar({
         ) : tab === "memory" ? (
           <MemoryPanel slug={workspaceSlug} />
         ) : (
-          <FilePanel root={workspacePath} />
+          <FilePanel root={workspacePath} workspaceId={workspaceSlug} />
         )}
       </div>
     </div>

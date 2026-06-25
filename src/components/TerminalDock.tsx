@@ -37,6 +37,11 @@ import {
   type AgentSpec,
 } from "../mcp";
 import { buildBrief, briefPrompt } from "../protocol";
+import DockEditor, { disposeEditorBuf, isEditorDirty } from "./DockEditor";
+import RunConfigBar from "./RunConfigBar";
+import DockActionsMenu from "./DockActionsMenu";
+import { registerDockHost } from "../dockBus";
+import type { RunConfig } from "../runConfigs";
 
 type TermParams = {
   termId: string;
@@ -46,6 +51,7 @@ type TermParams = {
   env?: Record<string, string>; // M7-A：agent 终端的身份环境变量(HTYBOX_MCP_TOKEN 等)
   model?: string; // M7-G：团队成员的模型，新建时拼进 --model
   initialPrompt?: string; // M7-C：新建时的位置 prompt（让 agent 先读协作简报）
+  launchCmd?: string; // M9-N8：运行配置的显式启动命令（新建时直接发，不走 launchCmdFor）
 };
 
 const DRAG_MIME = "application/x-htybox-item";
@@ -129,7 +135,11 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
   const commit = () => {
     const t = draft.trim();
     if (t) {
-      CUSTOM_TITLES[props.params.termId] = t;
+      const key =
+        props.params.termId ??
+        (props.params as { editorPath?: string }).editorPath ??
+        props.api.id;
+      CUSTOM_TITLES[key] = t;
       saveCT();
       props.api.setTitle(t);
     }
@@ -184,13 +194,16 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
     if (!c) return;
     // 复原时按"记住的会话名"恢复（claude --resume "<名>"），否则发新建命令
     const restored = RESTORED_IDS.has(termId);
-    const launch = launchCmdFor(
-      agentKind,
-      restored,
-      restored ? SESSION_NAMES[termId] : undefined,
-      props.params.model, // 团队成员新建时带 --model
-      restored ? undefined : props.params.initialPrompt, // 新建时先读协作简报
-    );
+    const launch =
+      !restored && props.params.launchCmd
+        ? props.params.launchCmd // M9-N8：运行配置命令直接发
+        : launchCmdFor(
+            agentKind,
+            restored,
+            restored ? SESSION_NAMES[termId] : undefined,
+            props.params.model, // 团队成员新建时带 --model
+            restored ? undefined : props.params.initialPrompt, // 新建时先读协作简报
+          );
     ensureEngine(termId, shell, launch, cwd, env, agentKind);
     attachEngine(termId, c);
 
@@ -303,7 +316,9 @@ function ProfileIcon({ id }: { id: string }) {
   );
 }
 
-const components = { terminal: DockTerminal };
+const components = { terminal: DockTerminal, editor: DockEditor };
+
+const baseName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() || p;
 
 let seq = 0;
 let termNo = 0;
@@ -346,6 +361,48 @@ export default function TerminalDock({
     [],
   );
 
+  // M9-N8：运行一个配置——新开 PowerShell 终端、cwd=配置目录(默认工作区根)、自动执行命令
+  const runCfg = useCallback(
+    (cfg: RunConfig) => {
+      const api = apiRef.current;
+      if (!api) return;
+      const id = mkId();
+      api.addPanel({
+        id,
+        component: "terminal",
+        title: `▶ ${cfg.name}`,
+        params: {
+          termId: id,
+          shell: "powershell.exe",
+          agentKind: "shell" as AgentKind,
+          cwd: cfg.cwd?.trim() || cwd,
+          launchCmd: cfg.command.replace(/[\r\n]+$/, "") + "\r",
+        },
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cwd],
+  );
+
+  // M9：dock 批量操作（关闭所有/其他/已保存编辑器）
+  const closeAll = useCallback(() => {
+    apiRef.current?.panels.slice().forEach((p) => p.api.close());
+  }, []);
+  const closeOthers = useCallback(() => {
+    const api = apiRef.current;
+    if (!api) return;
+    const active = api.activePanel;
+    api.panels.slice().forEach((p) => {
+      if (p !== active) p.api.close();
+    });
+  }, []);
+  const closeSavedEditors = useCallback(() => {
+    apiRef.current?.panels.slice().forEach((p) => {
+      const ep = (p.params as { editorPath?: string } | undefined)?.editorPath;
+      if (ep && !isEditorDirty(p.id)) p.api.close();
+    });
+  }, []);
+
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
       const api = event.api;
@@ -353,8 +410,12 @@ export default function TerminalDock({
       CLOSING.delete(workspaceId); // 重新打开 → 不再处于关闭态
 
       api.onDidRemovePanel((panel) => {
-        const termId = (panel.params as TermParams | undefined)?.termId;
-        if (!termId) return;
+        const params = panel.params as (TermParams & { editorPath?: string }) | undefined;
+        const termId = params?.termId;
+        if (!termId) {
+          if (params?.editorPath) disposeEditorBuf(panel.id); // 编辑器面板：清未保存缓冲
+          return;
+        }
         markTerminalClosed(termId); // M7-H：主动关闭 → 其 PTY 退出事件不当崩溃
         // 工作区关闭中：引擎已由 disposeByPrefix 统一结束，且要保留布局/自定义名供复原 → 跳过
         if (CLOSING.has(workspaceId)) return;
@@ -507,6 +568,41 @@ export default function TerminalDock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, cwd]);
 
+  // M9：注册"打开编辑器 / 在此开终端"总线（FilePanel 点击文件、右键操作经此路由到本 dock）。
+  useEffect(() => {
+    return registerDockHost(workspaceId, {
+      openEditor: (filePath) => {
+        const api = apiRef.current;
+        if (!api) return;
+        const existing = api.panels.find(
+          (p) => (p.params as { editorPath?: string } | undefined)?.editorPath === filePath,
+        );
+        if (existing) {
+          existing.api.setActive();
+          return;
+        }
+        api.addPanel({
+          id: `${workspaceId}::e-${Date.now().toString(36)}-${(seq++).toString(36)}`,
+          component: "editor",
+          title: baseName(filePath),
+          params: { editorPath: filePath, workspaceId },
+        });
+      },
+      openTerminalAt: (atCwd) => {
+        const api = apiRef.current;
+        if (!api) return;
+        const id = mkId();
+        api.addPanel({
+          id,
+          component: "terminal",
+          title: titleFor(DEFAULT_PROFILE),
+          params: { ...paramsFor(DEFAULT_PROFILE, id, cwd), cwd: atCwd },
+        });
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId, cwd]);
+
   return (
     <div className="flex h-full w-full flex-col bg-[#1f1e1d]">
       <div className="flex shrink-0 items-center gap-0.5 border-b border-[#e5e2d9] bg-[#f4f3ee] px-2 py-1.5">
@@ -521,6 +617,13 @@ export default function TerminalDock({
             <ProfileIcon id={p.id} />
           </button>
         ))}
+        <div className="flex-1" />
+        <RunConfigBar workspaceId={workspaceId} root={cwd} onRun={runCfg} />
+        <DockActionsMenu
+          onCloseAll={closeAll}
+          onCloseOthers={closeOthers}
+          onCloseSaved={closeSavedEditors}
+        />
       </div>
       <div className="dockview-theme-light min-h-0 flex-1">
         <DockviewReact
