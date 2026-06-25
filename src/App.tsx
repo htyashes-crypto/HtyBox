@@ -49,6 +49,25 @@ function loadRecents(): RecentFolder[] {
   return [];
 }
 
+// 侧栏/终端区分栏宽度持久化
+const LAYOUT_KEY = "htybox.layout.split.v1";
+function loadSplit(): number[] | undefined {
+  try {
+    const v = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "null");
+    if (Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === "number")) return v;
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
+function saveSplit(sizes: number[]): void {
+  try {
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(sizes));
+  } catch {
+    /* ignore */
+  }
+}
+
 export default function App() {
   const [recents, setRecents] = useState<RecentFolder[]>(loadRecents);
   const [openWs, setOpenWs] = useState<Workspace[]>([]);
@@ -58,6 +77,7 @@ export default function App() {
   const [showQuickOpen, setShowQuickOpen] = useState(false);
   // 已挂载过的 workspace（懒挂载 + 挂载后常驻 → 切走/回欢迎页时 PTY 后台存活）
   const [opened, setOpened] = useState<Set<string>>(new Set());
+  const [splitSizes] = useState(loadSplit); // 分栏宽度（持久化）
 
   useEffect(() => {
     try {
@@ -186,7 +206,7 @@ export default function App() {
       {/* 两栏：侧栏(Skill/Memory) | 终端区。终端区"始终挂载"——回欢迎页只是被覆盖层盖住，
           终端 PTY 后台存活、不卸载、不被误杀。 */}
       <div className="min-h-0 flex-1">
-        <Allotment proportionalLayout={false}>
+        <Allotment proportionalLayout={false} defaultSizes={splitSizes} onChange={saveSplit}>
           <Allotment.Pane minSize={220} preferredSize={300} snap>
             {active ? (
               <Sidebar workspacePath={active.path} workspaceSlug={active.id} />

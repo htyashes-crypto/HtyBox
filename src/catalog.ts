@@ -44,6 +44,22 @@ export interface MemoryNode {
 export const listMemoryTree = (slug: string) =>
   invoke<MemoryNode[]>("list_memory_tree", { slug });
 
+// ---- M9：claude/codex 会话记录 ----
+export interface SessionRef {
+  id: string;
+  label: string;
+  ts: number; // 毫秒
+  path: string;
+}
+export const listClaudeSessions = (cwd: string) =>
+  invoke<SessionRef[]>("list_claude_sessions", { cwd });
+export const listCodexSessions = (cwd: string) =>
+  invoke<SessionRef[]>("list_codex_sessions", { cwd });
+export const deleteClaudeSession = (id: string) =>
+  invoke<void>("delete_claude_session", { id });
+export const deleteCodexSession = (path: string) =>
+  invoke<void>("delete_codex_session", { path });
+
 export const listProjects = () => invoke<ProjectRef[]>("list_projects");
 
 // ---- M8：Skill 上架/下架管理（工作区级） ----

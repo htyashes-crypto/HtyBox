@@ -2,6 +2,7 @@ mod broker;
 mod catalog;
 mod fs_tree;
 mod pty;
+mod sessions;
 mod watcher;
 
 use std::sync::Arc;
@@ -157,6 +158,30 @@ fn list_all_files(
     skip_exts: Vec<String>,
 ) -> Vec<fs_tree::FileRef> {
     fs_tree::list_all_files(&root, skip_folders, skip_exts)
+}
+
+/// M9：列本工作区 claude 会话（取自 ~/.claude/history.jsonl，按 project==cwd）。
+#[tauri::command]
+fn list_claude_sessions(cwd: String) -> Vec<sessions::SessionRef> {
+    sessions::list_claude_sessions(&cwd)
+}
+
+/// M9：列本工作区 codex 会话（~/.codex/sessions 按 session_meta.cwd）。
+#[tauri::command]
+fn list_codex_sessions(cwd: String) -> Vec<sessions::SessionRef> {
+    sessions::list_codex_sessions(&cwd)
+}
+
+/// M9：删除 claude 会话（删 <id>.jsonl 入回收站）。
+#[tauri::command]
+fn delete_claude_session(id: String) -> Result<(), String> {
+    sessions::delete_claude_session(&id)
+}
+
+/// M9：删除 codex 会话（删 rollout 文件入回收站）。
+#[tauri::command]
+fn delete_codex_session(path: String) -> Result<(), String> {
+    sessions::delete_codex_session(&path)
 }
 
 /// M7-A：返回本地 MCP broker 的端点 URL（agent 的 .mcp.json 指向它）。
@@ -318,6 +343,10 @@ pub fn run() {
             import_dropped_file,
             reveal_in_explorer,
             list_all_files,
+            list_claude_sessions,
+            list_codex_sessions,
+            delete_claude_session,
+            delete_codex_session,
             mcp_broker_url,
             setup_mcp_agent,
             write_agent_brief,

@@ -168,12 +168,13 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
 
   return (
     <div className="flex h-full flex-col bg-[#f4f3ee]">
-      {/* 模板栏：只显示当前模板，点击打开切换弹窗；⚙ 管理 */}
+      {/* 模板栏：当前模板 → 下拉切换；⚙ 管理 */}
       <div className="flex items-center gap-1 px-2.5 pt-1.5 pb-1">
+        <div className="relative min-w-0 flex-1">
         <button
-          onClick={() => setShowPicker(true)}
+          onClick={() => setShowPicker((v) => !v)}
           title="切换模板"
-          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-[#ecebe2] px-3 py-1 text-[11px] font-semibold text-[#3a3a37] hover:bg-[#e3e1d6]"
+          className="flex w-full items-center gap-1.5 rounded-full bg-[#ecebe2] px-3 py-1 text-[11px] font-semibold text-[#3a3a37] hover:bg-[#e3e1d6]"
         >
           <svg
             className="h-3 w-3 shrink-0 text-[#d97757]"
@@ -201,6 +202,16 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
             <path d="m6 9 6 6 6-6" />
           </svg>
         </button>
+          {showPicker && (
+            <TemplatePicker
+              templates={templates}
+              activeId={activeId}
+              onPick={(t) => applyTpl(t)}
+              onManage={() => setShowTpl(true)}
+              onClose={() => setShowPicker(false)}
+            />
+          )}
+        </div>
         <button
           onClick={() => setShowTpl(true)}
           title="管理模板"
@@ -280,15 +291,6 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
           templates={templates}
           onClose={() => setShowTpl(false)}
           onChange={(list) => setTemplates(list)}
-        />
-      )}
-      {showPicker && (
-        <TemplatePicker
-          templates={templates}
-          activeId={activeId}
-          onPick={(t) => applyTpl(t)}
-          onManage={() => setShowTpl(true)}
-          onClose={() => setShowPicker(false)}
         />
       )}
     </div>

@@ -599,6 +599,23 @@ export default function TerminalDock({
           params: { ...paramsFor(DEFAULT_PROFILE, id, cwd), cwd: atCwd },
         });
       },
+      openTerminalCmd: (opts) => {
+        const api = apiRef.current;
+        if (!api) return;
+        const id = mkId();
+        api.addPanel({
+          id,
+          component: "terminal",
+          title: opts.title,
+          params: {
+            termId: id,
+            shell: "powershell.exe",
+            agentKind: opts.agentKind as AgentKind,
+            cwd: opts.cwd || cwd,
+            launchCmd: opts.command.replace(/[\r\n]+$/, "") + "\r",
+          },
+        });
+      },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, cwd]);

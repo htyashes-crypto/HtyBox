@@ -2,8 +2,9 @@ import { useState, type ReactElement } from "react";
 import SkillPanel from "./SkillPanel";
 import MemoryPanel from "./MemoryPanel";
 import FilePanel from "./FilePanel";
+import SessionPanel from "./SessionPanel";
 
-type Tab = "skill" | "memory" | "file";
+type Tab = "skill" | "memory" | "file" | "session";
 
 function SkillIcon() {
   return (
@@ -53,10 +54,27 @@ function FileTreeIcon() {
   );
 }
 
+function SessionIcon() {
+  return (
+    <svg
+      className="h-3.5 w-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 const TABS: { id: Tab; label: string; icon: () => ReactElement }[] = [
   { id: "file", label: "File", icon: FileTreeIcon },
   { id: "skill", label: "Skill", icon: SkillIcon },
   { id: "memory", label: "Memory", icon: MemoryIcon },
+  { id: "session", label: "Session", icon: SessionIcon },
 ];
 
 export default function Sidebar({
@@ -80,14 +98,14 @@ export default function Sidebar({
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 className={
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all " +
+                  "flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-semibold transition-all " +
                   (active
                     ? "bg-white text-[#191919] shadow-sm"
                     : "text-[#73726c] hover:text-[#191919]")
                 }
               >
                 <Icon />
-                {t.label}
+                <span className="truncate">{t.label}</span>
               </button>
             );
           })}
@@ -95,12 +113,14 @@ export default function Sidebar({
       </div>
       {/* 活动面板（作用域 = 当前工作区文件夹） */}
       <div className="min-h-0 flex-1">
-        {tab === "skill" ? (
+        {tab === "file" ? (
+          <FilePanel root={workspacePath} workspaceId={workspaceSlug} />
+        ) : tab === "skill" ? (
           <SkillPanel projectDir={workspacePath} />
         ) : tab === "memory" ? (
           <MemoryPanel slug={workspaceSlug} />
         ) : (
-          <FilePanel root={workspacePath} workspaceId={workspaceSlug} />
+          <SessionPanel root={workspacePath} workspaceId={workspaceSlug} />
         )}
       </div>
     </div>
