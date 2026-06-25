@@ -7,6 +7,10 @@ import {
   getAgentTerminal,
   getTermAgent,
   wasIntentionallyClosed,
+  launchAgents,
+  termInfoToSpec,
+  bumpRespawn,
+  respawnExceeded,
   relayAllow,
   relayStop,
   relayResume,
@@ -29,19 +33,23 @@ export default function WakeToasts() {
   const { autoRelay } = useSettings();
   const [wakes, setWakes] = useState<AgentWake[]>([]); // 待手动唤醒
   const [loopWarn, setLoopWarn] = useState<string | null>(null); // 死循环告警
-  const [downs, setDowns] = useState<{ termId: string; roleName: string }[]>([]); // 崩溃/退出
+  const [downs, setDowns] = useState<{ termId: string; text: string }[]>([]); // 崩溃/替补提示
   const [, setTick] = useState(0); // 触发重渲染以刷新用量显示
 
-  // 终端退出检测（M7-H 可见性）：排除用户主动关闭，仅对 agent 终端提示
+  // 终端退出（M7-H 崩溃自愈）：排除主动关闭；急停中/熔断不替补，否则按原身份自动替补 + 复职简报
   useEffect(() => {
     const un = onTerminalExit((termId) => {
       if (wasIntentionallyClosed(termId)) return;
       const info = getTermAgent(termId);
       if (!info) return;
-      setDowns((cur) => [
-        ...cur.filter((x) => x.termId !== termId),
-        { termId, roleName: info.roleName },
-      ]);
+      const push = (text: string) =>
+        setDowns((cur) => [...cur.filter((x) => x.termId !== termId), { termId, text }]);
+      if (relayUsage().stopped) return push(`${info.roleName} 终端已退出（急停中，不替补）`);
+      if (respawnExceeded(info.agentId))
+        return push(`${info.roleName} 连续崩溃≥3 次，已停止自动替补`);
+      const n = bumpRespawn(info.agentId);
+      launchAgents(info.workspaceId, [termInfoToSpec(info)], { respawn: true });
+      push(`${info.roleName} 崩溃 → 已自动替补顶岗（第 ${n} 次）`);
     });
     return () => {
       un.then((f) => f()).catch(() => {});
@@ -100,7 +108,7 @@ export default function WakeToasts() {
           key={d.termId}
           className="flex items-start gap-2 rounded-lg border border-[#d6453e]/40 bg-[#fdf3f2] px-3 py-2 shadow-lg"
         >
-          <span className="text-xs text-[#d6453e]">⚠ {d.roleName} 终端已退出</span>
+          <span className="text-xs text-[#d6453e]">⚠ {d.text}</span>
           <button
             onClick={() => setDowns((cur) => cur.filter((x) => x.termId !== d.termId))}
             className="ml-auto shrink-0 rounded px-1.5 text-xs text-[#a8a29a] hover:text-[#191919]"

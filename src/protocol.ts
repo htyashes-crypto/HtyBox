@@ -30,8 +30,16 @@ const WORKER = `## 你是 Worker(工人)
 - 卡住/需澄清时用 update_status("waiting") 或 send_message 给 Lead 说明。`;
 
 /** 生成某 agent 的协作简报(markdown)。roster=全队，goal=可选总目标(给 Lead)。 */
-export function buildBrief(self: AgentSpec, roster: AgentSpec[], goal?: string): string {
+export function buildBrief(
+  self: AgentSpec,
+  roster: AgentSpec[],
+  goal?: string,
+  respawn?: boolean,
+): string {
   const roleCn = self.role === "lead" ? "Lead(编排者)" : "Worker(工人)";
+  const respawnNote = respawn
+    ? '\n> ⚠ 你是【替补】：原终端已退出、由你顶岗。**先 list_tasks 看你名下在办任务、read_inbox 取未读，从中断处继续、勿重复已完成的**；不确定就 update_status("waiting") 或问 Lead。\n'
+    : "";
   const list = roster
     .map((a) => `- ${a.roleName}（${a.role === "lead" ? "Lead" : "worker"}·${a.agentKind}）`)
     .join("\n");
@@ -41,7 +49,7 @@ export function buildBrief(self: AgentSpec, roster: AgentSpec[], goal?: string):
       ? `\n\n## 本次总目标\n${goal && goal.trim() ? goal.trim() : "（待用户在你的终端下达；收到后开始 assign_task）"}`
       : "";
   return `# HtyBox 协作简报
-
+${respawnNote}
 ## 你的身份
 - 角色名：${self.roleName}
 - 角色：${roleCn}

@@ -425,7 +425,9 @@ export default function TerminalDock({
   // M7-A：响应 App「多 Agent 协作」，在本工作区起 agent 终端（注册身份 + 注入 token env）。
   // 顺序创建并左右分屏（都可见 → 都按真实列宽起、都连上 broker）。
   useEffect(() => {
-    return registerAgentLauncher(workspaceId, async (specs: AgentSpec[]) => {
+    return registerAgentLauncher(
+      workspaceId,
+      async (specs: AgentSpec[], opts?: { respawn?: boolean }) => {
       const api = apiRef.current;
       if (!api) return;
       let prevId: string | undefined;
@@ -468,7 +470,7 @@ export default function TerminalDock({
           await writeAgentBrief({
             cwd,
             agentId: spec.agentId,
-            content: buildBrief(spec, specs),
+            content: buildBrief(spec, specs, undefined, opts?.respawn),
           });
         } catch (e) {
           console.error("write_agent_brief failed", e);

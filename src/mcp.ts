@@ -63,7 +63,7 @@ export const writeAgentBrief = (args: {
 // ---- agent 启动总线 ----
 // App(顶栏「多 Agent 协作」) 请求"在某 workspace 的终端区起若干 agent 终端"，
 // 由该 workspace 的 TerminalDock 订阅并执行（它持有 dockview api）。
-type Launcher = (specs: AgentSpec[]) => void;
+type Launcher = (specs: AgentSpec[], opts?: { respawn?: boolean }) => void;
 const launchers = new Map<string, Launcher>();
 
 export function registerAgentLauncher(workspaceId: string, fn: Launcher): () => void {
@@ -73,11 +73,15 @@ export function registerAgentLauncher(workspaceId: string, fn: Launcher): () => 
   };
 }
 
-export function launchAgents(workspaceId: string, specs: AgentSpec[]): boolean {
+export function launchAgents(
+  workspaceId: string,
+  specs: AgentSpec[],
+  opts?: { respawn?: boolean },
+): boolean {
   const fn = launchers.get(workspaceId);
   if (!fn) return false;
-  resetRelay(); // M7-D：新一轮团队运行 → 重置全自动接力预算/急停
-  fn(specs);
+  if (!opts?.respawn) resetRelay(); // M7-D：新一轮团队运行重置预算/急停；M7-H 替补不重置
+  fn(specs, opts);
   return true;
 }
 
@@ -91,6 +95,30 @@ export function resetRelay(): void {
   relayCount = 0;
   relayStopped = false;
   relayStartAt = Date.now();
+  respawnCounts.clear(); // M7-H：新一轮运行重置崩溃替补计数
+}
+
+// ---- M7-H：崩溃替补熔断（同 agent 连续替补 ≥3 次则停）----
+const respawnCounts = new Map<string, number>();
+const RESPAWN_CAP = 3;
+export function bumpRespawn(agentId: string): number {
+  const n = (respawnCounts.get(agentId) ?? 0) + 1;
+  respawnCounts.set(agentId, n);
+  return n;
+}
+export function respawnExceeded(agentId: string): boolean {
+  return (respawnCounts.get(agentId) ?? 0) >= RESPAWN_CAP;
+}
+/** TermAgentInfo → AgentSpec（替补时按原身份重建）。 */
+export function termInfoToSpec(i: TermAgentInfo): AgentSpec {
+  return {
+    agentId: i.agentId,
+    roleName: i.roleName,
+    role: i.role,
+    agentKind: i.agentKind,
+    model: i.model,
+    responsibility: i.responsibility,
+  };
 }
 export function relayStop(): void {
   relayStopped = true;
