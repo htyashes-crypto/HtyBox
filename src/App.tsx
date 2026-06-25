@@ -7,8 +7,10 @@ import SettingsModal from "./components/SettingsModal";
 import CollabModal from "./components/CollabModal";
 import WakeToasts from "./components/WakeToasts";
 import QuickOpen from "./components/QuickOpen";
+import WindowControls from "./components/WindowControls";
 import { disposeByPrefix } from "./components/terminalEngine";
 import { launchAgents, type AgentSpec } from "./mcp";
+import { open } from "@tauri-apps/plugin-dialog";
 
 function GearIcon() {
   return (
@@ -75,6 +77,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showCollab, setShowCollab] = useState(false);
   const [showQuickOpen, setShowQuickOpen] = useState(false);
+  const [showWsPicker, setShowWsPicker] = useState(false); // 顶栏「+」工作区选择下拉
   // 已挂载过的 workspace（懒挂载 + 挂载后常驻 → 切走/回欢迎页时 PTY 后台存活）
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [splitSizes] = useState(loadSplit); // 分栏宽度（持久化）
@@ -94,6 +97,13 @@ export default function App() {
     setOpened((s) => new Set(s).add(id));
     setActiveId(id);
     setRecents((rs) => [{ name, path }, ...rs.filter((r) => r.path !== path)].slice(0, 12));
+  };
+
+  // 顶栏「+」：弹系统选择器选目录，选完即加为标签（无缝，不回欢迎页）
+  const pickFolder = async () => {
+    setShowWsPicker(false);
+    const sel = await open({ directory: true, multiple: false, title: "选择文件夹作为工作区" });
+    if (typeof sel === "string") openFolder(sel);
   };
 
   const closeWs = (id: string) => {
@@ -139,14 +149,16 @@ export default function App() {
     <div className="relative flex h-screen w-screen flex-col bg-[#faf9f5] text-[#191919]">
       {/* 顶部：品牌(回欢迎页) + 工作区标签 + 多 Agent（无活动工作区时隐藏） */}
       {active && (
-        <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] px-3">
+        <div
+          data-tauri-drag-region
+          className="relative z-20 flex h-11 shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] pl-3 select-none"
+        >
           <button
             onClick={() => setActiveId(null)}
             title="返回欢迎页"
-            className="flex items-center gap-2"
+            className="group flex items-center px-0.5"
           >
-            <div className="h-4 w-4 rounded bg-[#d97757]" />
-            <span className="text-sm font-bold">HtyBox</span>
+            <div className="h-5 w-5 rounded-md bg-[#d97757] shadow-sm transition-all duration-200 ease-out group-hover:-rotate-6 group-hover:scale-110 group-hover:bg-[#e0875f] group-hover:shadow-md group-active:scale-90 group-active:rotate-0" />
           </button>
           <div className="ml-3 flex items-center gap-1.5">
             {openWs.map((w) => {
@@ -176,15 +188,75 @@ export default function App() {
                 </div>
               );
             })}
-            <span
-              onClick={() => setActiveId(null)}
-              title="打开/新建工作区"
-              className="cursor-pointer rounded px-1.5 text-base text-[#73726c] hover:text-[#191919]"
-            >
-              +
-            </span>
+            <div className="relative">
+              <button
+                onClick={() => setShowWsPicker((v) => !v)}
+                title="打开工作区"
+                className="flex h-6 w-6 items-center justify-center rounded text-lg leading-none text-[#73726c] transition-colors hover:bg-white hover:text-[#191919]"
+              >
+                +
+              </button>
+              {showWsPicker && (
+                <>
+                  <div className="fixed inset-0 z-[60]" onClick={() => setShowWsPicker(false)} />
+                  <div className="absolute left-0 top-full z-[61] mt-1.5 w-72 overflow-hidden rounded-xl border border-[#e5e2d9] bg-white py-1.5 shadow-2xl">
+                    <button
+                      onClick={pickFolder}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] font-semibold text-[#191919] hover:bg-[#f4f3ee]"
+                    >
+                      <svg
+                        className="h-4 w-4 shrink-0 text-[#d97757]"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      </svg>
+                      打开文件夹作为工作区…
+                    </button>
+                    {recents.length > 0 && (
+                      <>
+                        <div className="my-1 border-t border-[#eeece4]" />
+                        <div className="px-3 pt-1 pb-1 text-[10px] font-semibold tracking-wider text-[#a8a29a] uppercase">
+                          最近
+                        </div>
+                        <div className="max-h-72 overflow-y-auto">
+                          {recents.map((r) => {
+                            const isOpen = openWs.some((w) => w.path === r.path);
+                            return (
+                              <button
+                                key={r.path}
+                                onClick={() => {
+                                  openFolder(r.path);
+                                  setShowWsPicker(false);
+                                }}
+                                title={r.path}
+                                className="flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-[#f4f3ee]"
+                              >
+                                <div className="flex w-full items-center gap-2">
+                                  <span className="truncate text-[12.5px] text-[#191919]">{r.name}</span>
+                                  {isOpen && (
+                                    <span className="ml-auto shrink-0 rounded bg-[#ecebe2] px-1 py-px text-[9px] font-medium text-[#8c8a82]">
+                                      已打开
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="truncate font-mono text-[10px] text-[#a8a29a]">{r.path}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 pr-1">
             <button
               onClick={() => setShowSettings(true)}
               title="设置"
@@ -200,6 +272,7 @@ export default function App() {
               多 Agent 协作
             </button>
           </div>
+          <WindowControls />
         </div>
       )}
 

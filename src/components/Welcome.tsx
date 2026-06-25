@@ -1,4 +1,5 @@
 import { open } from "@tauri-apps/plugin-dialog";
+import WindowControls from "./WindowControls";
 
 export interface RecentFolder {
   name: string;
@@ -25,10 +26,15 @@ export default function Welcome({
 
   return (
     <div className="relative flex h-screen w-screen items-center justify-center bg-[#faf9f5] text-[#191919]">
+      {/* 无边框窗口：顶部拖拽条 + 窗口控制（贴右上角） */}
+      <div data-tauri-drag-region className="absolute inset-x-0 top-0 h-9 select-none" />
+      <div className="absolute top-0 right-0 z-10 h-9">
+        <WindowControls />
+      </div>
       <button
         onClick={onOpenSettings}
         title="设置"
-        className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-md text-[#73726c] transition-colors hover:bg-[#ecebe2] hover:text-[#191919]"
+        className="absolute top-2.5 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-md text-[#73726c] transition-colors hover:bg-[#ecebe2] hover:text-[#191919]"
       >
         <svg
           className="h-4 w-4"
