@@ -57,6 +57,7 @@ struct Store {
     tasks: Vec<Task>,                      // 任务板（assign_task/report_result）
     shared: HashMap<String, String>,       // 黑板（read_shared/write_shared，含总目标）
     last_to: HashMap<String, (u64, u32)>,  // 目标 agentId -> (上条内容哈希, 连续重复次数)：死循环检测
+    claims: HashMap<String, String>,       // 归一化文件路径 -> 占用者 agentId（文件归属登记/冲突防护）
     seq: u64,
 }
 
@@ -351,6 +352,51 @@ impl Broker {
                 }
                 Ok(json!({ "broadcast": targets.len() }))
             }
+            "claim_files" => {
+                let paths = args
+                    .get("paths")
+                    .and_then(|v| v.as_array())
+                    .ok_or((-32602, "claim_files 需要 paths(字符串数组)".to_string()))?;
+                let mut granted: Vec<String> = vec![];
+                let mut conflicts: Vec<Value> = vec![];
+                for p in paths {
+                    let Some(path) = p.as_str() else { continue };
+                    let norm = normalize_path(path);
+                    match s.claims.get(&norm) {
+                        Some(owner) if owner != &caller.agent_id => {
+                            conflicts.push(json!({ "path": path, "owner": owner }));
+                        }
+                        _ => {
+                            s.claims.insert(norm, caller.agent_id.clone());
+                            granted.push(path.to_string());
+                        }
+                    }
+                }
+                Ok(json!({ "granted": granted, "conflicts": conflicts }))
+            }
+            "release_files" => {
+                let paths = args
+                    .get("paths")
+                    .and_then(|v| v.as_array())
+                    .ok_or((-32602, "release_files 需要 paths".to_string()))?;
+                for p in paths {
+                    if let Some(path) = p.as_str() {
+                        let norm = normalize_path(path);
+                        if s.claims.get(&norm) == Some(&caller.agent_id) {
+                            s.claims.remove(&norm);
+                        }
+                    }
+                }
+                Ok(json!({ "ok": true }))
+            }
+            "list_claims" => {
+                let claims: Vec<Value> = s
+                    .claims
+                    .iter()
+                    .map(|(p, o)| json!({ "path": p, "owner": o }))
+                    .collect();
+                Ok(json!({ "claims": claims }))
+            }
             "read_inbox" => {
                 let msgs = s
                     .inbox
@@ -474,6 +520,11 @@ fn hash_str(content: &str) -> u64 {
     h.finish()
 }
 
+/// 归一化文件路径用于归属比较：反斜杠转正斜杠 + 全小写（Windows 路径大小写不敏感）。
+fn normalize_path(p: &str) -> String {
+    p.replace('\\', "/").to_lowercase()
+}
+
 fn respond_json(req: Request, body: &Value) {
     let json_header = Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..])
         .expect("static header");
@@ -515,7 +566,15 @@ fn tool_defs() -> Value {
           "inputSchema": { "type": "object",
             "properties": { "key": {"type":"string"}, "value": {"type":"string"} }, "required": ["key", "value"] } },
         { "name": "read_shared", "description": "读共享黑板某个 key",
-          "inputSchema": { "type": "object", "properties": { "key": {"type":"string"} }, "required": ["key"] } }
+          "inputSchema": { "type": "object", "properties": { "key": {"type":"string"} }, "required": ["key"] } },
+        { "name": "claim_files", "description": "[Worker] 改文件前登记归属(占用这些路径)；被他人占用的会在 conflicts 返回",
+          "inputSchema": { "type": "object",
+            "properties": { "paths": {"type":"array","items":{"type":"string"}} }, "required": ["paths"] } },
+        { "name": "release_files", "description": "释放自己占用的文件路径(完成后调用)",
+          "inputSchema": { "type": "object",
+            "properties": { "paths": {"type":"array","items":{"type":"string"}} }, "required": ["paths"] } },
+        { "name": "list_claims", "description": "查看当前文件归属登记(路径→占用者)",
+          "inputSchema": { "type": "object", "properties": {} } }
     ])
 }
 
