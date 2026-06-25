@@ -53,20 +53,24 @@ export function launchCmdFor(
   resume: boolean,
   sessionName?: string,
   model?: string,
+  initialPrompt?: string,
 ): string | undefined {
   // 新建时按团队配置传 --model（claude/codex 均支持，已核实）；复原不带(会话自带模型)。
   // 清洗成安全 token(词字符+ . - :)，防破坏命令。
   const mm = (model ?? "").trim().replace(/[^\w.:-]/g, "");
   const m = mm ? ` --model ${mm}` : "";
+  // M7-C：新建时把"先读协作简报"作为位置 prompt（claude/codex 默认进交互并处理它）。清洗双引号/换行防破坏命令。
+  const ipRaw = (initialPrompt ?? "").replace(/["\r\n]/g, "").trim();
+  const ip = ipRaw ? ` "${ipRaw}"` : "";
   if (agent === "claude") {
     if (resume && sessionName) {
       const safe = sessionName.replace(/["\r\n]/g, ""); // 防止破坏命令引号
       return `claude --resume "${safe}"\r`; // 按会话名精确复原（官方 -r 支持 by name）
     }
-    return resume ? "claude --resume\r" : `claude${m}\r`; // 没记到名字 → 退回选择器
+    return resume ? "claude --resume\r" : `claude${m}${ip}\r`; // 没记到名字 → 退回选择器
   }
   // codex 仅能按 UUID 复原、无法按名 → 复原弹选择器让用户选
-  if (agent === "codex") return resume ? "codex resume\r" : `codex${m}\r`;
+  if (agent === "codex") return resume ? "codex resume\r" : `codex${m}${ip}\r`;
   return undefined;
 }
 

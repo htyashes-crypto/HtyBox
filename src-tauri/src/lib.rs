@@ -156,6 +156,20 @@ fn setup_mcp_agent(
     write_codex_config(&cwd, &url) // codex 读（信任项目时）
 }
 
+/// M7-C：写某 agent 的协作简报到 `<cwd>/.htybox/brief-<agentId>.md`。
+/// agent 启动时用位置 prompt 先读它，从而获知角色/职责/协作协议/总目标（应用级协议，非 skill）。
+#[tauri::command]
+fn write_agent_brief(cwd: String, agent_id: String, content: String) -> Result<(), String> {
+    let safe: String = agent_id
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .collect();
+    let dir = std::path::Path::new(&cwd).join(".htybox");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(format!("brief-{safe}.md"));
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let broker = broker::start();
@@ -182,7 +196,8 @@ pub fn run() {
             list_memories,
             list_projects,
             mcp_broker_url,
-            setup_mcp_agent
+            setup_mcp_agent,
+            write_agent_brief
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

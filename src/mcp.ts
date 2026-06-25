@@ -25,6 +25,13 @@ export const setupMcpAgent = (args: {
   workspace: string;
 }) => invoke<void>("setup_mcp_agent", args);
 
+/** M7-C：写某 agent 的协作简报到 <cwd>/.htybox/brief-<agentId>.md（启动时 agent 先读它）。 */
+export const writeAgentBrief = (args: {
+  cwd: string;
+  agentId: string;
+  content: string;
+}) => invoke<void>("write_agent_brief", args);
+
 // ---- agent 启动总线 ----
 // App(顶栏「多 Agent 协作」) 请求"在某 workspace 的终端区起若干 agent 终端"，
 // 由该 workspace 的 TerminalDock 订阅并执行（它持有 dockview api）。

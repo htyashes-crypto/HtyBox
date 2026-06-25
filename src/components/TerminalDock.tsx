@@ -32,8 +32,10 @@ import {
   setupMcpAgent,
   registerAgentLauncher,
   setAgentTerminal,
+  writeAgentBrief,
   type AgentSpec,
 } from "../mcp";
+import { buildBrief, briefPrompt } from "../protocol";
 
 type TermParams = {
   termId: string;
@@ -42,6 +44,7 @@ type TermParams = {
   cwd?: string;
   env?: Record<string, string>; // M7-A：agent 终端的身份环境变量(HTYBOX_MCP_TOKEN 等)
   model?: string; // M7-G：团队成员的模型，新建时拼进 --model
+  initialPrompt?: string; // M7-C：新建时的位置 prompt（让 agent 先读协作简报）
 };
 
 const DRAG_MIME = "application/x-htybox-item";
@@ -185,6 +188,7 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
       restored,
       restored ? SESSION_NAMES[termId] : undefined,
       props.params.model, // 团队成员新建时带 --model
+      restored ? undefined : props.params.initialPrompt, // 新建时先读协作简报
     );
     ensureEngine(termId, shell, launch, cwd, env, agentKind);
     attachEngine(termId, c);
@@ -447,6 +451,16 @@ export default function TerminalDock({
         AGENT_LABELS[id] = label;
         saveAL();
         setAgentTerminal(spec.agentId, id); // M7-B：供唤醒时定位终端注入
+        // M7-C：写协作简报（角色/职责/协议/花名册），启动用位置 prompt 让它先读 → 自己按协议协作
+        try {
+          await writeAgentBrief({
+            cwd,
+            agentId: spec.agentId,
+            content: buildBrief(spec, specs),
+          });
+        } catch (e) {
+          console.error("write_agent_brief failed", e);
+        }
         // claude 读 .mcp.json、codex 读 .codex/config.toml（setupMcpAgent 已分别写好）；普通启动即可
         api.addPanel({
           id,
@@ -458,6 +472,7 @@ export default function TerminalDock({
             agentKind: spec.agentKind,
             cwd,
             model: spec.model, // 新建时拼进 --model
+            initialPrompt: briefPrompt(spec.agentId), // M7-C：启动先读协作简报
             env: {
               HTYBOX_MCP_TOKEN: token,
               HTYBOX_AGENT_ID: spec.agentId,
