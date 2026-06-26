@@ -1,0 +1,21 @@
+<svg width="493" height="58" viewBox="0 0 493 58" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .wm{font-family:'Baloo 2','Segoe UI','Microsoft YaHei',sans-serif;font-weight:800;}
+    </style>
+    <g id="box" stroke="#2A211C" stroke-width="16" stroke-linejoin="round" stroke-linecap="round">
+      <polygon points="256,104 398,184 256,264 114,184" fill="#C75E38"/>
+      <line x1="256" y1="264" x2="256" y2="104"/>
+      <polygon points="114,184 256,264 256,432 114,352" fill="#E57B53"/>
+      <polygon points="256,264 398,184 398,352 256,432" fill="#D26741"/>
+      <line x1="256" y1="264" x2="256" y2="432"/>
+      <polygon points="114,184 256,264 313.3,231.7 171.3,151.7" fill="#F8EEE1"/>
+      <polygon points="256,264 398,184 340.7,151.7 198.7,231.7" fill="#F2E6D6"/>
+    </g>
+  </defs>
+
+  <!-- 横幅：左侧留白给 WiX 标题文字，品牌锁定在右侧 -->
+  <rect width="493" height="58" fill="#ffffff"/>
+  <text x="432" y="35" text-anchor="end" class="wm" font-size="15" fill="#2A211C">HtyBox</text>
+  <use href="#box" transform="translate(431.6,4.5) scale(0.0915)"/>
+</svg>

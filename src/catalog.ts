@@ -104,6 +104,14 @@ export const readTextFile = (path: string) =>
   invoke<ReadTextResult>("read_text_file", { path });
 export const writeTextFile = (path: string, content: string) =>
   invoke<void>("write_text_file", { path, content });
+/** M9：读图片为 base64 data URL（图片预览；非图片/超大 → ok=false + reason）。 */
+export interface ReadImageResult {
+  dataUrl: string;
+  ok: boolean;
+  reason?: string;
+}
+export const readImageDataUrl = (path: string) =>
+  invoke<ReadImageResult>("read_image_data_url", { path });
 export const createEntry = (parentDir: string, name: string, isDir: boolean) =>
   invoke<string>("create_entry", { parentDir, name, isDir });
 export const renameEntry = (path: string, newName: string) =>
@@ -115,8 +123,16 @@ export const copyEntry = (src: string, destDir: string) =>
   invoke<string>("copy_entry", { src, destDir });
 export const importDroppedFile = (destDir: string, name: string, bytes: number[]) =>
   invoke<string>("import_dropped_file", { destDir, name, bytes });
+// 拖入文件夹：先建去重顶层目录，再按相对路径逐项写入（保留结构）
+export const importMakeDir = (destDir: string, name: string) =>
+  invoke<string>("import_make_dir", { destDir, name });
+export const importDroppedEntry = (baseDir: string, relPath: string, isDir: boolean, bytes: number[]) =>
+  invoke<void>("import_dropped_entry", { baseDir, relPath, isDir, bytes });
 export const revealInExplorer = (path: string) =>
   invoke<void>("reveal_in_explorer", { path });
+// 编辑器打开/关闭文件时按需监听其外部变化（变化后后端 emit "file-changed"）
+export const watchFile = (path: string) => invoke<void>("watch_file", { path });
+export const unwatchFile = (path: string) => invoke<void>("unwatch_file", { path });
 
 // ---- M9：全局文件搜索（双击 Shift）----
 export interface FileRef {

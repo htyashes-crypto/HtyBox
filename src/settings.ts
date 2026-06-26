@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import type { FontKey } from "./fontKeys";
 
 /** 全局设置（未来各种开关都加到这里）。持久化在 localStorage。 */
 export interface Settings {
@@ -6,10 +7,12 @@ export interface Settings {
   hoverPreview: boolean;
   /** M7-D 多 Agent 全自动接力：开则唤醒自动注入(终端静默后)，关则半自动(弹提示点击唤醒) */
   autoRelay: boolean;
+  /** 界面字体：全局 UI/会话/编辑器/预览跟随（终端等宽不受影响）。默认鸿蒙 */
+  fontFamily: FontKey;
 }
 
 const KEY = "htybox.settings.v1";
-const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false };
+const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false, fontFamily: "harmony" };
 
 function load(): Settings {
   try {

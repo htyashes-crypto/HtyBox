@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { saveConfigs, emptyConfig, parseImport, type RunConfig } from "../runConfigs";
+import { saveConfigs, emptyConfig, parseImport, buildAiPrompt, type RunConfig } from "../runConfigs";
 import { readTextFile } from "../catalog";
 
 function PlayIcon() {
@@ -50,6 +50,13 @@ export default function RunConfigModal({
       setImportMsg("未找到 .htybox/run-configs.json");
     }
   };
+  // 复制"AI 自动配置"提示词：粘到终端里的 AI，让它生成 .htybox/run-configs.json，再回来点「从项目导入」
+  const copyAiPrompt = () => {
+    navigator.clipboard?.writeText(buildAiPrompt(root)).then(
+      () => setImportMsg("已复制提示词，粘给终端里的 AI"),
+      () => setImportMsg("复制失败"),
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/30" onClick={onClose}>
@@ -58,6 +65,7 @@ export default function RunConfigModal({
           <span className="text-sm font-semibold text-[#191919]">运行配置</span>
           <div className="flex items-center gap-2">
             {importMsg && <span className="truncate text-[10.5px] text-[#a05a3a]">{importMsg}</span>}
+            <button onClick={copyAiPrompt} title="复制提示词，粘到终端里跑着的 AI，让它生成 .htybox/run-configs.json" className="shrink-0 rounded-md bg-[#ecebe2] px-2 py-0.5 text-[11px] font-semibold text-[#73726c] hover:bg-[#e3e1d6] hover:text-[#191919]">AI 自动配置</button>
             <button onClick={importFromProject} title="从 <工作区>/.htybox/run-configs.json 导入" className="shrink-0 rounded-md bg-[#ecebe2] px-2 py-0.5 text-[11px] font-semibold text-[#73726c] hover:bg-[#e3e1d6] hover:text-[#191919]">从项目导入</button>
             <button onClick={onClose} className="shrink-0 rounded px-2 text-[#a8a29a] hover:text-[#191919]">✕</button>
           </div>

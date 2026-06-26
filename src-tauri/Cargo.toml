@@ -1,6 +1,6 @@
 [package]
 name = "htybox-app"
-version = "1.0.0"
+version = "1.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -22,6 +22,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+base64 = "0.22"
 portable-pty = "0.9.0"
 serde_yaml = "0.9.34"
 walkdir = "2.5.0"

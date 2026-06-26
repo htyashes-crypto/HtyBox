@@ -75,3 +75,20 @@ export function parseImport(json: string): RunConfig[] {
       cwd: c.cwd ? String(c.cwd) : undefined,
     }));
 }
+
+/** "AI 自动配置"提示词：复制后粘给终端里的 AI，教它写 .htybox/run-configs.json，再由"从项目导入"加载。 */
+export function buildAiPrompt(root: string): string {
+  return [
+    "请为当前项目生成 HtyBox 运行配置。",
+    "",
+    "目标文件：" + root + "/.htybox/run-configs.json（.htybox 目录不存在请先新建）。",
+    "",
+    "格式（JSON）：",
+    '{ "configs": [ { "name": "开发", "command": "pnpm dev", "cwd": "" }, { "name": "构建", "command": "pnpm build" } ] }',
+    "字段：name=配置显示名；command=在 PowerShell 终端执行的整行命令；cwd=工作目录，留空或省略=工作区根。",
+    "",
+    "要求：(1) 分析 package.json 的 scripts、Cargo.toml、Makefile、README，挑出开发/构建/测试/启动等常用命令；(2) 只写真实存在、可直接运行的命令，包管理器按锁文件判断（pnpm-lock.yaml→pnpm）；(3) 命令面向 Windows PowerShell。",
+    "",
+    "完成后提醒我：回到 HtyBox「运行配置」点「从项目导入」加载。",
+  ].join("\n");
+}

@@ -7,6 +7,8 @@ import {
   moveEntry,
   copyEntry,
   importDroppedFile,
+  importMakeDir,
+  importDroppedEntry,
   revealInExplorer,
   type DirEntry,
 } from "../catalog";
@@ -19,6 +21,23 @@ import { loadIgnore, saveIgnore, extOf, type IgnoreCfg } from "../fileIgnore";
 
 const DRAG_MIME = "application/x-htybox-item";
 const MAX_IMPORT = 20 * 1024 * 1024; // 单文件导入上限 20MB
+
+// 拖入文件夹支持：HTML5 FileSystem entry 的回调式 API → Promise 化
+const entryFile = (entry: FileSystemFileEntry) =>
+  new Promise<File>((resolve, reject) => entry.file(resolve, reject));
+const readBatch = (reader: FileSystemDirectoryReader) =>
+  new Promise<FileSystemEntry[]>((resolve, reject) => reader.readEntries(resolve, reject));
+// readEntries 每次最多返回 100 项，需循环读到返回空数组为止
+async function listEntries(dir: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
+  const reader = dir.createReader();
+  const all: FileSystemEntry[] = [];
+  for (;;) {
+    const batch = await readBatch(reader);
+    if (!batch.length) break;
+    all.push(...batch);
+  }
+  return all;
+}
 
 // 收藏的文件夹按工作区(root)持久化：{ [root]: 绝对路径[] }
 const FAV_KEY = "htybox.favFolders.v1";
@@ -69,6 +88,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [opErr, setOpErr] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false); // OS 文件/文件夹导入进行中
   const [dropDir, setDropDir] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false); // 内部拖拽进行中 → 显示"移动到根目录"投放区
   const [rootHot, setRootHot] = useState(false);
@@ -190,7 +210,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
     setActiveFile(p);
   };
 
-  // OS 文件导入（复制进目标目录；文件夹暂不支持）
+  // OS 文件导入回退路径：WebView 不支持 entry 接口时按 FileList（仅文件，无法递归文件夹）
   const importFiles = async (dir: string, files: FileList) => {
     let any = false;
     for (const f of Array.from(files)) {
@@ -199,15 +219,76 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
         const buf = new Uint8Array(await f.arrayBuffer());
         await importDroppedFile(dir, f.name, Array.from(buf));
         any = true;
-      } catch { setOpErr(`无法导入 ${f.name}（文件夹暂不支持，请逐个拖文件）`); }
+      } catch { setOpErr(`无法导入 ${f.name}`); }
     }
     if (any) { expand(dir); reloadDir(dir); }
   };
 
-  // 落点：OS 文件 → 复制；树内 file 拖拽 → 移动
+  // 递归把文件夹内容写进导入根 base（rel 为相对 base 的 '/' 路径，空字符串=base 自身）
+  const uploadDirInto = async (dirEntry: FileSystemDirectoryEntry, base: string, rel: string) => {
+    const kids = await listEntries(dirEntry);
+    if (!kids.length) {
+      if (rel) await importDroppedEntry(base, rel, true, []); // 保留空子目录（顶层目录已由 importMakeDir 建出）
+      return;
+    }
+    for (const k of kids) {
+      const childRel = rel ? `${rel}/${k.name}` : k.name;
+      if (k.isFile) {
+        const f = await entryFile(k as FileSystemFileEntry);
+        if (f.size > MAX_IMPORT) { setOpErr(`${f.name} 超过 20MB，未导入`); continue; }
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        await importDroppedEntry(base, childRel, false, Array.from(bytes));
+      } else if (k.isDirectory) {
+        await uploadDirInto(k as FileSystemDirectoryEntry, base, childRel);
+      }
+    }
+  };
+
+  // OS 拖入的顶层项（文件 / 文件夹）逐个复制进目标目录（文件夹保留内部结构）
+  const importEntries = async (dir: string, entries: FileSystemEntry[]) => {
+    setImporting(true);
+    let any = false;
+    try {
+      for (const en of entries) {
+        try {
+          if (en.isFile) {
+            const f = await entryFile(en as FileSystemFileEntry);
+            if (f.size > MAX_IMPORT) { setOpErr(`${f.name} 超过 20MB，未导入`); continue; }
+            const bytes = new Uint8Array(await f.arrayBuffer());
+            await importDroppedFile(dir, f.name, Array.from(bytes));
+            any = true;
+          } else if (en.isDirectory) {
+            const base = await importMakeDir(dir, en.name);
+            await uploadDirInto(en as FileSystemDirectoryEntry, base, "");
+            any = true;
+          }
+        } catch (err) { setOpErr(`导入 “${en.name}” 失败：${String(err)}`); }
+      }
+    } finally {
+      setImporting(false);
+    }
+    if (any) { expand(dir); reloadDir(dir); }
+  };
+
+  // 落点：OS 文件/文件夹 → 复制（保留结构）；树内 file 拖拽 → 移动
   const onFolderDrop = async (dir: string, e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation(); setDropDir(null);
-    if (e.dataTransfer.files && e.dataTransfer.files.length) { importFiles(dir, e.dataTransfer.files); return; }
+    if (e.dataTransfer.types.includes("Files")) {
+      // 同步收集顶层 entry：DataTransferItem 在事件结束后失效，必须在任何 await 前取完
+      const entries: FileSystemEntry[] = [];
+      const items = e.dataTransfer.items;
+      if (items?.length) {
+        for (const it of Array.from(items)) {
+          if (it.kind === "file") {
+            const en = it.webkitGetAsEntry();
+            if (en) entries.push(en);
+          }
+        }
+      }
+      if (entries.length) await importEntries(dir, entries);
+      else if (e.dataTransfer.files?.length) await importFiles(dir, e.dataTransfer.files);
+      return;
+    }
     const raw = e.dataTransfer.getData(DRAG_MIME);
     if (!raw) return;
     try {
@@ -364,6 +445,11 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           <button onClick={() => setOpErr(null)} className="ml-auto shrink-0 text-[10px] text-[#a8a29a] hover:text-[#191919]">✕</button>
         </div>
       )}
+      {importing && (
+        <div className="mx-2.5 mb-1 rounded-md border border-[#d4a27f] bg-[#fdf6f2] px-2 py-1.5 text-[10.5px] text-[#a05a3a]">
+          正在导入…
+        </div>
+      )}
       {/* 移动到根目录投放区：常驻 + 高度/透明度过渡，丝滑淡入淡出 */}
       <div
         className={
@@ -402,11 +488,13 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           }}
           onDragLeave={stopScroll}
           className={
-            "absolute inset-x-0 top-0 z-10 flex h-7 items-center justify-center border-b border-[#d97757]/40 bg-gradient-to-b from-[#d97757]/45 to-transparent text-[11px] font-semibold text-[#c15f3c] transition-all duration-200 ease-out " +
+            "hty-scrollhint hty-scrollhint-top absolute inset-x-2.5 top-0 z-10 flex h-7 items-center justify-center overflow-hidden rounded-md border-b border-[#d97757]/30 text-[11px] font-semibold text-[#c15f3c] transition-all duration-200 ease-out " +
             (dragActive ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-2 opacity-0")
           }
         >
-          ▲ 悬停此处上滚
+          <span className="relative z-[1] inline-flex items-center gap-1">
+            <span className="hty-hint-arrow">▲</span>悬停此处上滚
+          </span>
         </div>
         <div
           onDragOver={(e) => {
@@ -415,11 +503,13 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           }}
           onDragLeave={stopScroll}
           className={
-            "absolute inset-x-0 bottom-0 z-10 flex h-7 items-center justify-center border-t border-[#d97757]/40 bg-gradient-to-t from-[#d97757]/45 to-transparent text-[11px] font-semibold text-[#c15f3c] transition-all duration-200 ease-out " +
+            "hty-scrollhint hty-scrollhint-bottom absolute inset-x-2.5 bottom-0 z-10 flex h-7 items-center justify-center overflow-hidden rounded-md border-t border-[#d97757]/30 text-[11px] font-semibold text-[#c15f3c] transition-all duration-200 ease-out " +
             (dragActive ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0")
           }
         >
-          ▼ 悬停此处下滚
+          <span className="relative z-[1] inline-flex items-center gap-1">
+            <span className="hty-hint-arrow hty-hint-arrow-down">▼</span>悬停此处下滚
+          </span>
         </div>
         <div ref={scrollRef} className="h-full overflow-y-auto px-1 pb-3">
           {/* 收藏文件夹：独立快速跳转区（原树仍照常显示，不隐藏） */}

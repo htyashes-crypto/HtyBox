@@ -108,6 +108,12 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
     fs_tree::write_text_file(&path, &content)
 }
 
+/// M9：读图片为 base64 data URL（图片预览；非图片/超大 → ok=false）。
+#[tauri::command]
+fn read_image_data_url(path: String) -> Result<fs_tree::ReadImageResult, String> {
+    fs_tree::read_image_data_url(&path)
+}
+
 /// M9：新建文件/文件夹。
 #[tauri::command]
 fn create_entry(parent_dir: String, name: String, is_dir: bool) -> Result<String, String> {
@@ -144,10 +150,39 @@ fn import_dropped_file(dest_dir: String, name: String, bytes: Vec<u8>) -> Result
     fs_tree::import_dropped_file(&dest_dir, &name, bytes)
 }
 
+/// M9：为拖入的文件夹在目标目录建去重后的顶层目录，返回其绝对路径。
+#[tauri::command]
+fn import_make_dir(dest_dir: String, name: String) -> Result<String, String> {
+    fs_tree::import_make_dir(&dest_dir, &name)
+}
+
+/// M9：把拖入文件夹里的一项（文件字节 / 空目录）按相对路径写到导入根之下。
+#[tauri::command]
+fn import_dropped_entry(
+    base_dir: String,
+    rel_path: String,
+    is_dir: bool,
+    bytes: Vec<u8>,
+) -> Result<(), String> {
+    fs_tree::import_dropped_entry(&base_dir, &rel_path, is_dir, bytes)
+}
+
 /// M9：在资源管理器中定位。
 #[tauri::command]
 fn reveal_in_explorer(path: String) -> Result<(), String> {
     fs_tree::reveal_in_explorer(&path)
+}
+
+/// M9：编辑器打开文件时开始监听其外部变化（变化后 emit "file-changed"）。
+#[tauri::command]
+fn watch_file(path: String) -> Result<(), String> {
+    watcher::watch_file(&path)
+}
+
+/// M9：编辑器关闭文件时停止监听。
+#[tauri::command]
+fn unwatch_file(path: String) -> Result<(), String> {
+    watcher::unwatch_file(&path)
 }
 
 /// M9：递归列工作区所有文件（双击 Shift 全局搜索；排除噪声目录 + 忽略名单）。
@@ -343,13 +378,18 @@ pub fn run() {
             list_dir,
             read_text_file,
             write_text_file,
+            read_image_data_url,
             create_entry,
             rename_entry,
             delete_entry,
             move_entry,
             copy_entry,
             import_dropped_file,
+            import_make_dir,
+            import_dropped_entry,
             reveal_in_explorer,
+            watch_file,
+            unwatch_file,
             list_all_files,
             list_claude_sessions,
             list_codex_sessions,

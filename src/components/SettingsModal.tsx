@@ -1,4 +1,5 @@
 import { useSettings, setSetting } from "../settings";
+import { FONTS, applyFont } from "../fonts";
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -66,6 +67,40 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               on={s.autoRelay}
               onChange={(v) => setSetting("autoRelay", v)}
             />
+          </div>
+
+          <div className="rounded-lg px-3 py-2.5">
+            <div className="text-sm font-medium text-[#191919]">界面字体</div>
+            <div className="mb-2.5 text-[11px] text-[#8c8a82]">
+              全局 UI、会话、编辑器、Markdown 预览跟随；终端与代码块保持等宽
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {FONTS.map((f) => {
+                const on = s.fontFamily === f.key;
+                return (
+                  <button
+                    key={f.key}
+                    onClick={() => {
+                      setSetting("fontFamily", f.key);
+                      applyFont(f.key);
+                    }}
+                    style={{ fontFamily: f.stack }}
+                    className={
+                      "rounded-lg border px-3 py-2 text-left transition-colors " +
+                      (on
+                        ? "border-[#d97757] bg-[#f7ede8]"
+                        : "border-[#e5e2d9] hover:bg-[#f0eee6]")
+                    }
+                  >
+                    <div className="flex items-center gap-1.5 text-[15px] leading-tight text-[#191919]">
+                      {f.label}
+                      {on && <span className="text-[#d97757]">✓</span>}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-[#8c8a82]">{f.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 

@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use base64::prelude::{Engine as _, BASE64_STANDARD};
 use serde::Serialize;
 use walkdir::WalkDir;
 
@@ -87,6 +88,62 @@ pub fn read_text_file(path: &str) -> Result<ReadTextResult, String> {
 
 pub fn write_text_file(path: &str, content: &str) -> Result<(), String> {
     std::fs::write(path, content).map_err(|e| e.to_string())
+}
+
+const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024; // 20MB：base64 走 IPC，过大易卡，超过不预览
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadImageResult {
+    pub data_url: String,
+    pub ok: bool,
+    pub reason: Option<String>,
+}
+
+/// 扩展名 → WebView 可渲染的图片 MIME；非受支持图片返回 None（svg 由文本预览另行处理）。
+fn image_mime(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" | "jfif" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "avif" => "image/avif",
+        _ => return None,
+    })
+}
+
+/// 读图片为 base64 data URL（供「文件」页签预览）。
+/// 非图片/目录/超大 → ok=false + reason（不回数据）；读失败 → Err 供行内提示。
+pub fn read_image_data_url(path: &str) -> Result<ReadImageResult, String> {
+    let p = Path::new(path);
+    let fail = |reason: String| ReadImageResult {
+        data_url: String::new(),
+        ok: false,
+        reason: Some(reason),
+    };
+    let Some(mime) = image_mime(p) else {
+        return Ok(fail("不是受支持的图片格式".to_string()));
+    };
+    let meta = std::fs::metadata(p).map_err(|e| e.to_string())?;
+    if meta.is_dir() {
+        return Err("是目录，无法作为图片打开".into());
+    }
+    if meta.len() > MAX_IMAGE_BYTES {
+        return Ok(fail(format!(
+            "图片过大（{} MB），不支持预览",
+            meta.len() / 1024 / 1024
+        )));
+    }
+    let bytes = std::fs::read(p).map_err(|e| e.to_string())?;
+    let b64 = BASE64_STANDARD.encode(&bytes);
+    Ok(ReadImageResult {
+        data_url: format!("data:{mime};base64,{b64}"),
+        ok: true,
+        reason: None,
+    })
 }
 
 /// 校验新名安全（防越界/非法）。
@@ -216,6 +273,43 @@ pub fn import_dropped_file(dest_dir: &str, name: &str, bytes: Vec<u8>) -> Result
     let target = unique_in_dir(Path::new(dest_dir), &n);
     std::fs::write(&target, &bytes).map_err(|e| e.to_string())?;
     Ok(target.to_string_lossy().into_owned())
+}
+
+/// 为拖入的文件夹在目标目录创建去重后的顶层目录，返回其绝对路径。
+/// 之后该文件夹内的每一项都用 `import_dropped_entry` 写到这个返回值之下，
+/// 以保持「整个文件夹同名只去重一次、内部结构原样保留」。
+pub fn import_make_dir(dest_dir: &str, name: &str) -> Result<String, String> {
+    let n = sanitize_name(name)?;
+    let target = unique_in_dir(Path::new(dest_dir), &n);
+    std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+    Ok(target.to_string_lossy().into_owned())
+}
+
+/// 把拖入文件夹里的一项写到导入根 `base_dir` 之下，按相对路径保留层级。
+/// `rel_path` 以 '/' 分隔，逐段经 `sanitize_name` 校验防越界；
+/// `is_dir=true` 仅创建目录（用于保留空子目录），否则写文件字节并自动建父目录。
+pub fn import_dropped_entry(
+    base_dir: &str,
+    rel_path: &str,
+    is_dir: bool,
+    bytes: Vec<u8>,
+) -> Result<(), String> {
+    let mut target = PathBuf::from(base_dir);
+    for seg in rel_path.split('/') {
+        if seg.is_empty() {
+            continue;
+        }
+        target.push(sanitize_name(seg)?);
+    }
+    if is_dir {
+        std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+    } else {
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&target, &bytes).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// 在系统资源管理器中定位该文件/目录。

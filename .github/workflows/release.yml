@@ -1,0 +1,88 @@
+# HtyBox 自动发布 Release —— 由 /changelog-publish 推送的 v* tag 触发
+#
+# 触发后:各平台并行构建 → 创建 GitHub Release(正文取仓库根 RELEASE_NOTES.md)
+#         → 上传安装包 + updater 的 latest.json/.sig(与应用内自动更新闭环)
+#
+# 一次性前置(GitHub 仓库 → Settings → Secrets and variables → Actions 配置):
+#   TAURI_SIGNING_PRIVATE_KEY           updater 签名私钥(须与 tauri.conf.json 的 pubkey 配对)
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  私钥密码(生成时未设密码则填空字符串)
+# 私钥生成:在 HtyBox/ 下执行 `pnpm tauri signer generate -w ~/.tauri/htybox.key`
+# 注意:tauri.conf.json 已 createUpdaterArtifacts:true,缺这两个 secret 会导致构建失败。
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: ''
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Read release notes
+        id: notes
+        shell: bash
+        run: |
+          if [ -f RELEASE_NOTES.md ]; then
+            { echo 'body<<NOTES_EOF'; cat RELEASE_NOTES.md; echo NOTES_EOF; } >> "$GITHUB_OUTPUT"
+          else
+            { echo 'body<<NOTES_EOF'; echo '下载下方安装包即可安装本版本。'; echo NOTES_EOF; } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'HtyBox ${{ github.ref_name }}'
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
