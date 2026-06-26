@@ -1,0 +1,40 @@
+<svg width="164" height="314" viewBox="0 0 164 314" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .wm{font-family:'Baloo 2','Segoe UI','Microsoft YaHei',sans-serif;font-weight:800;}
+      .tag{font-family:'Segoe UI','Microsoft YaHei','PingFang SC',sans-serif;}
+      .mono{font-family:'Consolas','Menlo',monospace;}
+    </style>
+    <linearGradient id="terra" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EA8C66"/>
+      <stop offset="0.55" stop-color="#D26741"/>
+      <stop offset="1" stop-color="#B6502E"/>
+    </linearGradient>
+    <filter id="bsh" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#3a1c0f" flood-opacity="0.30"/>
+    </filter>
+    <g id="box" stroke="#2A211C" stroke-width="16" stroke-linejoin="round" stroke-linecap="round">
+      <polygon points="256,104 398,184 256,264 114,184" fill="#C75E38"/>
+      <line x1="256" y1="264" x2="256" y2="104"/>
+      <polygon points="114,184 256,264 256,432 114,352" fill="#E57B53"/>
+      <polygon points="256,264 398,184 398,352 256,432" fill="#D26741"/>
+      <line x1="256" y1="264" x2="256" y2="432"/>
+      <polygon points="114,184 256,264 313.3,231.7 171.3,151.7" fill="#F8EEE1"/>
+      <polygon points="256,264 398,184 340.7,151.7 198.7,231.7" fill="#F2E6D6"/>
+    </g>
+  </defs>
+
+  <rect width="164" height="314" fill="url(#terra)"/>
+
+  <!-- brand badge -->
+  <rect x="38" y="44" width="88" height="88" rx="19" fill="#faf9f5" filter="url(#bsh)"/>
+  <use href="#box" transform="translate(35.15,38.96) scale(0.183)"/>
+
+  <!-- wordmark + tagline -->
+  <text x="82" y="188" text-anchor="middle" class="wm" font-size="23" fill="#faf9f5">HtyBox</text>
+  <text x="82" y="210" text-anchor="middle" class="tag" font-size="9.5" fill="#ffffffe0">终端 · Skill · Memory 工作台</text>
+
+  <!-- footer -->
+  <line x1="52" y1="283" x2="112" y2="283" stroke="#ffffff" stroke-opacity="0.28" stroke-width="1"/>
+  <text x="82" y="297" text-anchor="middle" class="mono" font-size="8.5" fill="#ffffffb3">v1.0.0</text>
+</svg>

@@ -54,7 +54,7 @@ export default function Welcome({
         {/* 品牌 */}
         <div className="mb-10 flex items-center justify-center gap-5">
           <HtyBoxLogo size={144} initial="closed" introOnMount openOnHover />
-          <span className="text-7xl font-bold tracking-tight">HtyBox</span>
+          <span className="text-7xl font-bold tracking-tight" style={{ fontFamily: '"Baloo 2", sans-serif' }}>HtyBox</span>
         </div>
 
         {/* 打开文件夹 */}

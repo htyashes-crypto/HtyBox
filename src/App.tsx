@@ -412,7 +412,9 @@ export default function App() {
       )}
 
       {/* 全局设置弹窗（盖在最上层） */}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal root={active?.path ?? null} onClose={() => setShowSettings(false)} />
+      )}
 
       {/* 多 Agent 协作：团队库 + 一键开启（在当前工作区起整支团队） */}
       {showCollab && (

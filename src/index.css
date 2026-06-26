@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* 全局可切换界面字体：本地内置子集 woff2（~1MB/款，含 GB2312 全汉字+拉丁+标点）。
+   切换见 fonts.ts（写 --app-font）；终端/代码块另用等宽。 */
+@font-face{font-family:"HarmonyOS Sans SC";src:url("./assets/fonts/HarmonyOS-SC.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"DingTalk JinBuTi";src:url("./assets/fonts/DingTalkJinBuTi.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Alibaba PuHuiTi";src:url("./assets/fonts/AlibabaPuHuiTi.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"LXGW WenKai";src:url("./assets/fonts/LXGWWenKai.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+
+/* 主页 wordmark 专用艺术字体（仅 Welcome 的 HtyBox，独立于全局界面字体，不随设置切换） */
+@font-face{font-family:"Baloo 2";src:url("./assets/fonts/Baloo2.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+
 html,
 body,
 #root {
@@ -10,7 +20,7 @@ body,
 body {
   background: #faf9f5;
   color: #191919;
-  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-family: var(--app-font);
   overflow: hidden;
 }
 
@@ -18,6 +28,8 @@ body {
 :root {
   --separator-border: #e5e2d9;
   --focus-border: #d97757;
+  /* 全局界面字体（默认鸿蒙；由设置面板切换，见 fonts.ts） */
+  --app-font: "HarmonyOS Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
 /* 细窄滚动条（浅色奶油主题） */
@@ -175,4 +187,53 @@ body {
   border: none;
   border-top: 1px solid #e5e2d9;
   margin: 1em 0;
+}
+
+/* ============ 拖拽自动滚动提示条：纯颗粒（陶土噪点向内淡出 + 缓慢流动）============ */
+/* 颗粒源 = 内联 SVG feTurbulence（fractalNoise，大而稀的陶土颗粒），平铺后用 mask 向内淡出。
+   设计稿见 ..\.claude\svg\file-scroll-hint-aurora.svg。 */
+.hty-scrollhint::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.28' numOctaves='2' seed='3' stitchTiles='stitch' result='n'/%3E%3CfeColorMatrix in='n' type='matrix' values='0 0 0 0 0.851 0 0 0 0 0.467 0 0 0 0 0.341 0 0 0 1 0' result='c'/%3E%3CfeComponentTransfer in='c'%3E%3CfeFuncA type='linear' slope='1.6' intercept='-0.62'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 160px 160px;
+  will-change: background-position;
+}
+.hty-scrollhint-top::before {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.4) 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.4) 55%, transparent 100%);
+  animation: hty-grain-flow 9s linear infinite;
+}
+.hty-scrollhint-bottom::before {
+  -webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.4) 45%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.4) 45%, transparent 100%);
+  animation: hty-grain-flow 10s linear infinite reverse;
+}
+@keyframes hty-grain-flow {
+  from { background-position: 0 0; }
+  to { background-position: 160px 0; }
+}
+/* ▲▼ 箭头轻微呼吸浮动 */
+.hty-hint-arrow {
+  display: inline-block;
+  animation: hty-bob-up 1.8s ease-in-out infinite;
+}
+.hty-hint-arrow-down {
+  animation-name: hty-bob-down;
+}
+@keyframes hty-bob-up {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+@keyframes hty-bob-down {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hty-scrollhint::before,
+  .hty-hint-arrow { animation: none; }
 }

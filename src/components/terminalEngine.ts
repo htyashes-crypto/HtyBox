@@ -69,7 +69,9 @@ export function ensureEngine(
   const term = new Terminal({
     allowProposedApi: true, // Unicode11Addon 需要
     convertEol: false,
-    fontFamily: '"Cascadia Code", "Consolas", monospace',
+    // 英文走 Cascadia Code / Consolas；中文显式落 Microsoft YaHei，避免 Chromium 对 monospace 的
+    // CJK 兜底落到偏细粗糙的 SimSun(宋体) → 中文渲染更平滑、贴近原生终端（Bug B：字体锐化）。
+    fontFamily: '"Cascadia Code", "Consolas", "Microsoft YaHei", monospace',
     fontSize: 13,
     cursorBlink: true,
     cursorStyle: "bar", // 竖线光标（非粗块）

@@ -3,6 +3,7 @@ import { listAllFiles, type FileRef } from "../catalog";
 import { openEditor } from "../dockBus";
 import { loadIgnore } from "../fileIgnore";
 import { searchScore } from "../search";
+import { useSettings } from "../settings";
 
 /** M9：双击 Shift 唤出的全局文件搜索（统一搜索规则，排除忽略名单，点击/回车打开）。 */
 export default function QuickOpen({
@@ -15,13 +16,23 @@ export default function QuickOpen({
   onClose: () => void;
 }) {
   const [all, setAll] = useState<FileRef[]>([]);
+  const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
+  const s = useSettings();
 
   useEffect(() => {
     const ig = loadIgnore(root); // 排除被忽略的文件夹/扩展名
-    listAllFiles(root, ig.folders, ig.exts).then(setAll).catch(() => setAll([]));
-  }, [root]);
+    listAllFiles(root, ig.folders, ig.exts, s.maxFiles)
+      .then((r) => {
+        setAll(r.files);
+        setTotal(r.total);
+      })
+      .catch(() => {
+        setAll([]);
+        setTotal(0);
+      });
+  }, [root, s.maxFiles]);
 
   const results = useMemo(() => {
     return all
@@ -86,6 +97,18 @@ export default function QuickOpen({
             </button>
           ))}
         </div>
+        {all.length > 0 && (
+          <div className="flex items-center justify-between gap-2 border-t border-[#e5e2d9] px-4 py-1.5 text-[11px] text-[#a8a29a]">
+            <span>
+              {all.length < total
+                ? `已索引 ${all.length.toLocaleString()} / 共 ${total.toLocaleString()} 个文件`
+                : `共 ${total.toLocaleString()} 个文件`}
+            </span>
+            {all.length < total && (
+              <span className="shrink-0 text-[#d97757]">超出上限，部分未索引</span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

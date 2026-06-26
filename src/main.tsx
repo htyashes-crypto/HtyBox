@@ -1,5 +1,6 @@
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { initFont } from "./fonts";
 import { IconProvider, DEFAULT_ICON_CONFIGS } from "@icon-park/react";
 import "allotment/dist/style.css";
 import "@icon-park/react/styles/index.css";
@@ -17,6 +18,9 @@ const ICON_CONFIG = {
 };
 
 // 刻意不用 React.StrictMode —— 它在 dev 下二次挂载 effect 会重复 spawn/kill PTY 子进程。
+// 启动时按持久化设置应用界面字体（须在渲染前，避免字体闪烁）
+initFont();
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <IconProvider value={ICON_CONFIG}>
     <App />

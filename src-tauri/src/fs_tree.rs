@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use base64::prelude::{Engine as _, BASE64_STANDARD};
 use serde::Serialize;
 use walkdir::WalkDir;
 
@@ -87,6 +88,62 @@ pub fn read_text_file(path: &str) -> Result<ReadTextResult, String> {
 
 pub fn write_text_file(path: &str, content: &str) -> Result<(), String> {
     std::fs::write(path, content).map_err(|e| e.to_string())
+}
+
+const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024; // 20MB：base64 走 IPC，过大易卡，超过不预览
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadImageResult {
+    pub data_url: String,
+    pub ok: bool,
+    pub reason: Option<String>,
+}
+
+/// 扩展名 → WebView 可渲染的图片 MIME；非受支持图片返回 None（svg 由文本预览另行处理）。
+fn image_mime(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" | "jfif" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "avif" => "image/avif",
+        _ => return None,
+    })
+}
+
+/// 读图片为 base64 data URL（供「文件」页签预览）。
+/// 非图片/目录/超大 → ok=false + reason（不回数据）；读失败 → Err 供行内提示。
+pub fn read_image_data_url(path: &str) -> Result<ReadImageResult, String> {
+    let p = Path::new(path);
+    let fail = |reason: String| ReadImageResult {
+        data_url: String::new(),
+        ok: false,
+        reason: Some(reason),
+    };
+    let Some(mime) = image_mime(p) else {
+        return Ok(fail("不是受支持的图片格式".to_string()));
+    };
+    let meta = std::fs::metadata(p).map_err(|e| e.to_string())?;
+    if meta.is_dir() {
+        return Err("是目录，无法作为图片打开".into());
+    }
+    if meta.len() > MAX_IMAGE_BYTES {
+        return Ok(fail(format!(
+            "图片过大（{} MB），不支持预览",
+            meta.len() / 1024 / 1024
+        )));
+    }
+    let bytes = std::fs::read(p).map_err(|e| e.to_string())?;
+    let b64 = BASE64_STANDARD.encode(&bytes);
+    Ok(ReadImageResult {
+        data_url: format!("data:{mime};base64,{b64}"),
+        ok: true,
+        reason: None,
+    })
 }
 
 /// 校验新名安全（防越界/非法）。
@@ -218,6 +275,43 @@ pub fn import_dropped_file(dest_dir: &str, name: &str, bytes: Vec<u8>) -> Result
     Ok(target.to_string_lossy().into_owned())
 }
 
+/// 为拖入的文件夹在目标目录创建去重后的顶层目录，返回其绝对路径。
+/// 之后该文件夹内的每一项都用 `import_dropped_entry` 写到这个返回值之下，
+/// 以保持「整个文件夹同名只去重一次、内部结构原样保留」。
+pub fn import_make_dir(dest_dir: &str, name: &str) -> Result<String, String> {
+    let n = sanitize_name(name)?;
+    let target = unique_in_dir(Path::new(dest_dir), &n);
+    std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+    Ok(target.to_string_lossy().into_owned())
+}
+
+/// 把拖入文件夹里的一项写到导入根 `base_dir` 之下，按相对路径保留层级。
+/// `rel_path` 以 '/' 分隔，逐段经 `sanitize_name` 校验防越界；
+/// `is_dir=true` 仅创建目录（用于保留空子目录），否则写文件字节并自动建父目录。
+pub fn import_dropped_entry(
+    base_dir: &str,
+    rel_path: &str,
+    is_dir: bool,
+    bytes: Vec<u8>,
+) -> Result<(), String> {
+    let mut target = PathBuf::from(base_dir);
+    for seg in rel_path.split('/') {
+        if seg.is_empty() {
+            continue;
+        }
+        target.push(sanitize_name(seg)?);
+    }
+    if is_dir {
+        std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+    } else {
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&target, &bytes).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// 在系统资源管理器中定位该文件/目录。
 pub fn reveal_in_explorer(path: &str) -> Result<(), String> {
     std::process::Command::new("explorer")
@@ -252,7 +346,8 @@ const SKIP_DIRS: &[&str] = &[
     "MemoryCaptures",
     "UserSettings",
 ];
-const MAX_FILES: usize = 100000;
+// 遍历防爆硬上限：正常工作区（已剔除噪声目录/忽略名单）远不及；仅防病态目录把扫描拖死。
+const HARD_WALK_CAP: usize = 5_000_000;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -262,28 +357,48 @@ pub struct FileRef {
     pub path: String,
 }
 
-/// 递归列工作区所有文件（跳过常见重目录 + 忽略名单的文件夹名/扩展名，上限 MAX_FILES）。
-/// 供 quick-open 前端过滤。skip_folders=忽略的文件夹名，skip_exts=忽略的扩展名(不含点)。
-pub fn list_all_files(
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ListFilesResult {
+    /// 收集到的前 max_files 个文件（供 quick-open 列表/过滤）。
+    pub files: Vec<FileRef>,
+    /// 工作区有效文件真实总数（即使 files 因 max_files 截断也照数完），供前端显示/判断是否截断。
+    pub total: usize,
+}
+
+/// 遍历工作区「有效文件」（统一口径）：跳 SKIP_DIRS（任意层级噪声目录）
+/// + 用户忽略名单 folderset（仅 root 一级目录，与文件树「顶层忽略」一致）
+/// + extset（任意层级按扩展名）。返回 (前 max_collect 个 FileRef, 有效文件真实总数)。
+fn walk_files(
     root: &str,
     skip_folders: Vec<String>,
     skip_exts: Vec<String>,
-) -> Vec<FileRef> {
+    max_collect: usize,
+) -> (Vec<FileRef>, usize) {
     use std::collections::HashSet;
     let root_path = Path::new(root);
     let folderset: HashSet<String> = skip_folders.into_iter().collect();
     let extset: HashSet<String> = skip_exts.into_iter().map(|e| e.to_lowercase()).collect();
     let mut out = Vec::new();
+    let mut total = 0usize;
     let walker = WalkDir::new(root_path).into_iter().filter_entry(|e| {
         if e.file_type().is_dir() {
             if let Some(n) = e.file_name().to_str() {
-                return !(SKIP_DIRS.contains(&n) || folderset.contains(n));
+                // 噪声目录（node_modules/.git/Library/Temp…）：任意层级都跳。
+                if SKIP_DIRS.contains(&n) {
+                    return false;
+                }
+                // 用户忽略名单：仅作用于 root 一级目录（depth==1），与文件树「顶层文件夹忽略」语义对齐；
+                // 否则深层同名目录（如各子工程内的 Packages）会被全层级误杀——文件树看得到却搜不到。
+                if e.depth() == 1 && folderset.contains(n) {
+                    return false;
+                }
             }
         }
         true
     });
     for entry in walker.filter_map(|e| e.ok()) {
-        if out.len() >= MAX_FILES {
+        if total >= HARD_WALK_CAP {
             break;
         }
         if !entry.file_type().is_file() {
@@ -296,6 +411,10 @@ pub fn list_all_files(
                     continue;
                 }
             }
+        }
+        total += 1;
+        if out.len() >= max_collect {
+            continue; // 已达收集上限：只继续计数得真实总数，不再收集 FileRef
         }
         let name = p
             .file_name()
@@ -314,5 +433,27 @@ pub fn list_all_files(
             path: p.to_string_lossy().into_owned(),
         });
     }
-    out
+    (out, total)
+}
+
+/// 列工作区文件供 quick-open：收集前 max_files 个 + 返回有效文件真实总数。
+/// skip_folders=忽略的文件夹名（仅匹配 root 一级目录，与文件树「顶层忽略」一致）；
+/// skip_exts=忽略的扩展名（不含点，作用于所有层级文件）；max_files=收集上限（全局设置，默认 10 万）。
+pub fn list_all_files(
+    root: &str,
+    skip_folders: Vec<String>,
+    skip_exts: Vec<String>,
+    max_files: usize,
+) -> ListFilesResult {
+    let (files, total) = walk_files(root, skip_folders, skip_exts, max_files);
+    ListFilesResult { files, total }
+}
+
+/// 只统计工作区有效文件总数（不收集列表，供设置面板「当前工作区文件数」显示）。
+pub fn count_workspace_files(
+    root: &str,
+    skip_folders: Vec<String>,
+    skip_exts: Vec<String>,
+) -> usize {
+    walk_files(root, skip_folders, skip_exts, 0).1
 }
