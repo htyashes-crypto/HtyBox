@@ -82,12 +82,12 @@ export default function InfoCard({
         onMouseLeave={hide}
         onMouseDown={hide}
         className={
-          "flex items-center gap-2 rounded-lg border border-[#e5e2d9] bg-white px-3 py-2 transition-colors hover:border-[#d4a27f] hover:bg-[#fbfaf7] " +
+          "flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--surface-soft)] " +
           (onDragStart ? "cursor-grab active:cursor-grabbing " : "") +
           (dimmed ? "opacity-55" : "")
         }
       >
-        <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-[#191919]">
+        <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-[var(--text)]">
           {name}
         </span>
         {trailing}
@@ -103,8 +103,8 @@ export default function InfoCard({
             className={
               "shrink-0 transition-colors " +
               (favorite.active
-                ? "text-[#d97757]"
-                : "text-[#cfcbc2] hover:text-[#d97757]")
+                ? "text-[var(--accent)]"
+                : "text-[var(--text-faint)] hover:text-[var(--accent)]")
             }
           >
             <HeartIcon filled={favorite.active} />
@@ -115,7 +115,7 @@ export default function InfoCard({
         createPortal(
           <div
             style={{ position: "fixed", top: box.top, left: box.left, width: 340, zIndex: 60 }}
-            className="pointer-events-none rounded-xl border border-[#e5e2d9] bg-white px-3.5 py-3 shadow-lg"
+            className="pointer-events-none rounded-xl border border-[var(--border)] bg-[var(--elevated)] px-3.5 py-3 shadow-lg"
           >
             {preview}
           </div>,

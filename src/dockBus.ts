@@ -4,7 +4,7 @@
 interface DockHost {
   openEditor: (path: string) => void;
   openTerminalAt: (cwd: string) => void;
-  openTerminalCmd: (opts: { command: string; agentKind: string; title: string; cwd?: string }) => void;
+  openTerminalCmd: (opts: { command: string; agentKind: string; title: string; cwd?: string; sessionId?: string }) => void;
 }
 
 const hosts = new Map<string, DockHost>();
@@ -29,7 +29,7 @@ export function openTerminalAt(workspaceId: string, cwd: string): void {
 /** 在某工作区新开终端并自动执行命令（运行配置 / 复原会话用）。 */
 export function openTerminalCmd(
   workspaceId: string,
-  opts: { command: string; agentKind: string; title: string; cwd?: string },
+  opts: { command: string; agentKind: string; title: string; cwd?: string; sessionId?: string },
 ): void {
   hosts.get(workspaceId)?.openTerminalCmd(opts);
 }

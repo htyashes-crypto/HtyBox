@@ -22,14 +22,14 @@ export default function WindowControls() {
   }, []);
 
   const btn =
-    "flex h-full w-[46px] items-center justify-center text-[#73726c] transition-colors";
+    "flex h-full w-[46px] items-center justify-center text-[var(--text-2)] transition-colors";
 
   return (
     <div className="flex h-full items-stretch">
       <button
         onClick={() => win.minimize()}
         title="最小化"
-        className={btn + " hover:bg-[#e3e1d6] hover:text-[#191919]"}
+        className={btn + " hover:bg-[var(--border-soft)] hover:text-[var(--text)]"}
       >
         <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1">
           <path d="M0.5 5h9" />
@@ -38,7 +38,7 @@ export default function WindowControls() {
       <button
         onClick={() => win.toggleMaximize()}
         title={maxed ? "还原" : "最大化"}
-        className={btn + " hover:bg-[#e3e1d6] hover:text-[#191919]"}
+        className={btn + " hover:bg-[var(--border-soft)] hover:text-[var(--text)]"}
       >
         {maxed ? (
           <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1">
@@ -54,7 +54,7 @@ export default function WindowControls() {
       <button
         onClick={() => win.close()}
         title="关闭"
-        className={btn + " hover:bg-[#e81123] hover:text-white"}
+        className={btn + " hover:bg-[var(--danger)] hover:text-white"}
       >
         <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1">
           <path d="M1 1l8 8M9 1l-8 8" />

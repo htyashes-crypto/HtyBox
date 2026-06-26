@@ -108,31 +108,31 @@ export default function WakeToasts() {
       {downs.map((d) => (
         <div
           key={d.termId}
-          className="flex items-start gap-2 rounded-lg border border-[#d6453e]/40 bg-[#fdf3f2] px-3 py-2 shadow-lg"
+          className="flex items-start gap-2 rounded-lg border border-[var(--danger)]/40 bg-[var(--accent-soft)] px-3 py-2 shadow-lg"
         >
-          <span className="text-xs text-[#d6453e]">⚠ {d.text}</span>
+          <span className="text-xs text-[var(--danger)]">⚠ {d.text}</span>
           <button
             onClick={() => setDowns((cur) => cur.filter((x) => x.termId !== d.termId))}
-            className="ml-auto shrink-0 rounded px-1.5 text-xs text-[#a8a29a] hover:text-[#191919]"
+            className="ml-auto shrink-0 rounded px-1.5 text-xs text-[var(--text-3)] hover:text-[var(--text)]"
           >
             ✕
           </button>
         </div>
       ))}
       {loopWarn && (
-        <div className="flex items-start gap-2 rounded-lg border border-[#d6453e]/40 bg-[#fdf3f2] px-3 py-2 shadow-lg">
-          <span className="text-xs text-[#d6453e]">⚠ {loopWarn}</span>
+        <div className="flex items-start gap-2 rounded-lg border border-[var(--danger)]/40 bg-[var(--accent-soft)] px-3 py-2 shadow-lg">
+          <span className="text-xs text-[var(--danger)]">⚠ {loopWarn}</span>
           <button
             onClick={() => setLoopWarn(null)}
-            className="ml-auto shrink-0 rounded px-1.5 text-xs text-[#a8a29a] hover:text-[#191919]"
+            className="ml-auto shrink-0 rounded px-1.5 text-xs text-[var(--text-3)] hover:text-[var(--text)]"
           >
             ✕
           </button>
         </div>
       )}
       {showRelayBar && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#e5e2d9] bg-white px-3 py-2 shadow-lg">
-          <span className="text-xs text-[#73726c]">
+        <div className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--elevated)] px-3 py-2 shadow-lg">
+          <span className="text-xs text-[var(--text-2)]">
             {usage.stopped ? "⏸ 全自动已急停" : "⚡ 全自动接力中"} · {usage.count}/{usage.cap}
           </span>
           {usage.stopped ? (
@@ -141,7 +141,7 @@ export default function WakeToasts() {
                 relayResume();
                 setTick((n) => n + 1);
               }}
-              className="ml-auto rounded-md bg-[#d97757] px-2 py-0.5 text-xs font-semibold text-white hover:bg-[#c15f3c]"
+              className="ml-auto rounded-md bg-[var(--accent)] px-2 py-0.5 text-xs font-semibold text-white hover:bg-[var(--accent-text)]"
             >
               恢复
             </button>
@@ -152,7 +152,7 @@ export default function WakeToasts() {
                 interruptAllAgents(); // 群发 Ctrl+C 真中断
                 setTick((n) => n + 1);
               }}
-              className="ml-auto rounded-md border border-[#d6453e]/40 px-2 py-0.5 text-xs font-semibold text-[#d6453e] hover:bg-[#d6453e]/10"
+              className="ml-auto rounded-md border border-[var(--danger)]/40 px-2 py-0.5 text-xs font-semibold text-[var(--danger)] hover:bg-[var(--danger)]/10"
             >
               急停
             </button>
@@ -162,22 +162,22 @@ export default function WakeToasts() {
       {wakes.map((w) => (
         <div
           key={w.agentId}
-          className="rounded-lg border border-[#e8c8bb] bg-white p-3 shadow-lg"
+          className="rounded-lg border border-[var(--accent-border-soft)] bg-[var(--elevated)] p-3 shadow-lg"
         >
-          <div className="text-xs font-semibold text-[#191919]">🔔 {w.roleName} 有新消息</div>
-          <div className="mt-0.5 truncate text-[11px] text-[#a8a29a]">
+          <div className="text-xs font-semibold text-[var(--text)]">🔔 {w.roleName} 有新消息</div>
+          <div className="mt-0.5 truncate text-[11px] text-[var(--text-3)]">
             来自 {w.from}：{w.preview}
           </div>
           <div className="mt-2 flex gap-2">
             <button
               onClick={() => wake(w)}
-              className="rounded-md bg-[#d97757] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#c15f3c]"
+              className="rounded-md bg-[var(--accent)] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[var(--accent-text)]"
             >
               唤醒
             </button>
             <button
               onClick={() => dismiss(w.agentId)}
-              className="rounded-md px-2.5 py-1 text-xs text-[#73726c] hover:bg-[#f4f3ee]"
+              className="rounded-md px-2.5 py-1 text-xs text-[var(--text-2)] hover:bg-[var(--surface)]"
             >
               忽略
             </button>

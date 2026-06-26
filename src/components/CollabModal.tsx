@@ -97,11 +97,11 @@ export default function CollabModal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[80vh] w-[760px] max-w-full flex-col overflow-hidden rounded-xl border border-[#e5e2d9] bg-[#faf9f5] shadow-2xl"
+        className="flex max-h-[80vh] w-[760px] max-w-full flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] px-4 py-3">
-          <span className="text-sm font-bold text-[#191919]">Agent Team</span>
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <span className="text-sm font-bold text-[var(--text)]">Agent Team</span>
           <div className="ml-2 flex gap-1">
             {(["library", "run"] as const).map((t) => (
               <button
@@ -110,27 +110,27 @@ export default function CollabModal({
                 className={
                   "rounded-md px-2.5 py-1 text-xs transition-colors " +
                   (tab === t
-                    ? "bg-white font-semibold text-[#191919] shadow-sm"
-                    : "text-[#73726c] hover:text-[#191919]")
+                    ? "bg-[var(--elevated)] font-semibold text-[var(--text)] shadow-sm"
+                    : "text-[var(--text-2)] hover:text-[var(--text)]")
                 }
               >
                 {t === "library" ? "团队库" : "运行面板"}
               </button>
             ))}
           </div>
-          {msg && <span className="text-xs text-[#c15f3c]">{msg}</span>}
+          {msg && <span className="text-xs text-[var(--accent-text)]">{msg}</span>}
           <div className="ml-auto flex items-center gap-2">
             {tab === "library" && (
               <button
                 onClick={() => setEditing(emptyTeam())}
-                className="rounded-md bg-[#d97757] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[#c15f3c]"
+                className="rounded-md bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent-text)]"
               >
                 + 新建团队
               </button>
             )}
             <button
               onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[#73726c] hover:bg-white hover:text-[#191919]"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-2)] hover:bg-[var(--elevated)] hover:text-[var(--text)]"
             >
               ✕
             </button>
@@ -143,16 +143,16 @@ export default function CollabModal({
           <>
             <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto p-4">
           {teams.map((t) => (
-            <div key={t.id} className="flex flex-col rounded-lg border border-[#e5e2d9] bg-white p-3">
-              <div className="truncate text-sm font-semibold text-[#191919]">{t.name || "未命名团队"}</div>
+            <div key={t.id} className="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--elevated)] p-3">
+              <div className="truncate text-sm font-semibold text-[var(--text)]">{t.name || "未命名团队"}</div>
               {t.description && (
-                <div className="mt-0.5 truncate text-[11px] text-[#a8a29a]">{t.description}</div>
+                <div className="mt-0.5 truncate text-[11px] text-[var(--text-3)]">{t.description}</div>
               )}
               <div className="mt-2 flex flex-1 flex-col gap-1">
                 {t.agents.map((a) => (
-                  <div key={a.id} className="truncate text-xs text-[#73726c]">
+                  <div key={a.id} className="truncate text-xs text-[var(--text-2)]">
                     {a.isLead ? "👑" : "🔧"} {a.roleName || "(未命名)"}
-                    <span className="text-[#a8a29a]">
+                    <span className="text-[var(--text-3)]">
                       （{a.agentKind}
                       {a.model ? "·" + a.model : ""}）
                     </span>
@@ -167,25 +167,25 @@ export default function CollabModal({
                     onLaunch(teamToSpecs(t));
                     onClose();
                   }}
-                  className="rounded-md bg-[#d97757]/12 px-2 py-1 text-xs font-semibold text-[#c15f3c] transition-colors hover:bg-[#d97757]/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-md bg-[var(--accent)]/12 px-2 py-1 text-xs font-semibold text-[var(--accent-text)] transition-colors hover:bg-[var(--accent)]/20 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   ▶ 一键开启
                 </button>
                 <button
                   onClick={() => setEditing(structuredClone(t))}
-                  className="rounded-md px-2 py-1 text-xs text-[#73726c] hover:bg-[#f4f3ee] hover:text-[#191919]"
+                  className="rounded-md px-2 py-1 text-xs text-[var(--text-2)] hover:bg-[var(--surface)] hover:text-[var(--text)]"
                 >
                   编辑
                 </button>
                 <button
                   onClick={() => onDuplicate(t)}
-                  className="rounded-md px-2 py-1 text-xs text-[#73726c] hover:bg-[#f4f3ee] hover:text-[#191919]"
+                  className="rounded-md px-2 py-1 text-xs text-[var(--text-2)] hover:bg-[var(--surface)] hover:text-[var(--text)]"
                 >
                   复制
                 </button>
                 <button
                   onClick={() => persist(teams.filter((x) => x.id !== t.id))}
-                  className="ml-auto rounded-md px-2 py-1 text-xs text-[#a8a29a] hover:bg-[#f4f3ee] hover:text-[#d6453e]"
+                  className="ml-auto rounded-md px-2 py-1 text-xs text-[var(--text-3)] hover:bg-[var(--surface)] hover:text-[var(--danger)]"
                 >
                   ✕
                 </button>
@@ -193,24 +193,24 @@ export default function CollabModal({
             </div>
           ))}
           {teams.length === 0 && (
-            <div className="col-span-2 py-10 text-center text-sm text-[#a8a29a]">
+            <div className="col-span-2 py-10 text-center text-sm text-[var(--text-3)]">
               还没有团队，点右上「+ 新建团队」
             </div>
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 border-t border-[#e5e2d9] bg-[#f4f3ee] px-4 py-2.5">
-          <span className="text-[11px] text-[#a8a29a]">团队存于本机（localStorage）</span>
+        <div className="flex shrink-0 items-center gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-2.5">
+          <span className="text-[11px] text-[var(--text-3)]">团队存于本机（localStorage）</span>
           <div className="ml-auto flex gap-2">
             <button
               onClick={doImport}
-              className="rounded-md border border-[#e5e2d9] px-3 py-1 text-xs text-[#73726c] hover:border-[#d4a27f] hover:text-[#191919]"
+              className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--text-2)] hover:border-[var(--accent-border)] hover:text-[var(--text)]"
             >
               导入
             </button>
             <button
               onClick={doExport}
-              className="rounded-md border border-[#e5e2d9] px-3 py-1 text-xs text-[#73726c] hover:border-[#d4a27f] hover:text-[#191919]"
+              className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--text-2)] hover:border-[var(--accent-border)] hover:text-[var(--text)]"
             >
               导出
             </button>

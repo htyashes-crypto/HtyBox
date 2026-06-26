@@ -20,11 +20,11 @@ const countTopics = (node: MemoryNode): number =>
 
 function Chevron({ open }: { open: boolean }) {
   return (
-    <svg className={"h-3 w-3 shrink-0 text-[#9a978f] transition-transform " + (open ? "rotate-90" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+    <svg className={"h-3 w-3 shrink-0 text-[var(--text-faint)] transition-transform " + (open ? "rotate-90" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
   );
 }
 function FolderGlyph() {
-  return <svg className="h-3.5 w-3.5 shrink-0 text-[#c79a6a]" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>;
+  return <svg className="h-3.5 w-3.5 shrink-0 text-[var(--accent-text)]" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>;
 }
 
 /** 只显示当前工作区记忆（~/.claude/projects/<slug>/memory）。分级文件夹树；旧平铺结构亦兼容。 */
@@ -83,15 +83,15 @@ export default function MemoryPanel({ slug }: { slug: string }) {
           preview={
             <>
               <div className="flex items-center gap-2">
-                <span className="text-[13px] font-semibold text-[#191919]">{m.name}</span>
+                <span className="text-[13px] font-semibold text-[var(--text)]">{m.name}</span>
                 {m.memType && (
                   <span className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide uppercase" style={{ color: c, background: c + "22" }}>
                     {m.memType}
                   </span>
                 )}
               </div>
-              <div className="mt-1 font-mono text-[10px] break-all text-[#a8a29a]">{m.path}</div>
-              <div className="mt-1.5 text-[11px] leading-relaxed text-[#73726c]">{m.description || "（无描述）"}</div>
+              <div className="mt-1 font-mono text-[10px] break-all text-[var(--text-3)]">{m.path}</div>
+              <div className="mt-1.5 text-[11px] leading-relaxed text-[var(--text-2)]">{m.description || "（无描述）"}</div>
             </>
           }
         />
@@ -108,12 +108,12 @@ export default function MemoryPanel({ slug }: { slug: string }) {
         <div
           onClick={() => toggle(node.path)}
           style={{ paddingLeft: 8 + depth * 12 }}
-          className="flex cursor-pointer items-center gap-1.5 rounded py-1 pr-2 text-[12px] font-semibold text-[#3a3a37] hover:bg-[#ecebe2]"
+          className="flex cursor-pointer items-center gap-1.5 rounded py-1 pr-2 text-[12px] font-semibold text-[var(--text-deep)] hover:bg-[var(--surface-hover)]"
         >
           <Chevron open={open} />
           <FolderGlyph />
           <span className="min-w-0 flex-1 truncate">{prettyGroup(node.name)}</span>
-          <span className="shrink-0 text-[10px] font-normal text-[#a8a29a]">{countTopics(node)}</span>
+          <span className="shrink-0 text-[10px] font-normal text-[var(--text-3)]">{countTopics(node)}</span>
         </div>
         {open && <div className="mt-1 space-y-1.5">{kids.map((k) => renderNode(k, depth + 1))}</div>}
       </div>
@@ -121,13 +121,13 @@ export default function MemoryPanel({ slug }: { slug: string }) {
   };
 
   return (
-    <div className="flex h-full flex-col bg-[#f4f3ee]">
+    <div className="flex h-full flex-col bg-[var(--surface)]">
       <div className="px-2.5 pt-1 pb-2">
         <SearchBox value={q} onChange={setQ} placeholder="搜索本工作区 memory…" />
       </div>
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2.5 pb-3">
         {filtered.length === 0 && (
-          <div className="px-1 pt-6 text-center text-[11px] text-[#a8a29a]">
+          <div className="px-1 pt-6 text-center text-[11px] text-[var(--text-3)]">
             {searching ? "无匹配 memory" : "本工作区暂无 memory"}
           </div>
         )}

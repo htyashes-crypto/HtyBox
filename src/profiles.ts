@@ -41,17 +41,18 @@ export const PROFILES: Profile[] = [
 export const DEFAULT_PROFILE = PROFILES[0];
 
 /**
- * 计算终端启动后自动发送的命令。复原(resume)=【按"记住的会话名称"精确复原】，多终端各回各的：
- * 实测 claude 交互模式忽略 --session-id（自生成 id），故不能靠预设 id；改为捕获每个终端的会话名
- * （=claude 通过 OSC 设的标题，见 TerminalDock 的 SESSION_NAMES），复原时按名恢复。
- * - claude：新建 `claude`；复原 `claude --resume "<名>"`（官方 -r 支持 by name）；无名退回 `claude --resume`(选择器)
- * - codex：新建 `codex`；复原 `codex resume`（codex 只能按 UUID 复原、无法按名 → 选择器让用户选）
+ * 计算终端启动后自动发送的命令。复原(resume)=【按 session id 精确复原】，多终端各回各的：
+ * 关键：claude/codex 的复原都是【按 session ID】(实测官方 --help)。为保持新建命令行干净，HtyBox
+ * 不在新建时预分配 id，而是【新建发裸命令、启动后捕获 agent 自生成的真实 id】(见 TerminalDock 的
+ * 捕获逻辑 + SESSION_IDS)，复原时按捕获到的 id 精确复原 → 不依赖 OSC 标题、不受状态符号(✳)影响。
+ * - claude：新建 `claude`；复原 `claude --resume <id>`；无 id 退回 `claude --resume`(选择器)
+ * - codex：新建 `codex`；复原 `codex resume <id>`；无 id 退回 `codex resume`(选择器)
  * - shell：无启动命令。
  */
 export function launchCmdFor(
   agent: AgentKind,
   resume: boolean,
-  sessionName?: string,
+  sessionId?: string,
   model?: string,
   initialPrompt?: string,
 ): string | undefined {
@@ -62,15 +63,22 @@ export function launchCmdFor(
   // M7-C：新建时把"先读协作简报"作为位置 prompt（claude/codex 默认进交互并处理它）。清洗双引号/换行防破坏命令。
   const ipRaw = (initialPrompt ?? "").replace(/["\r\n]/g, "").trim();
   const ip = ipRaw ? ` "${ipRaw}"` : "";
+  // 仅接受标准 UUID 形态(crypto.randomUUID 产出)，防注入破坏命令。
+  const sid = /^[0-9a-fA-F-]{36}$/.test((sessionId ?? "").trim())
+    ? (sessionId as string).trim()
+    : "";
   if (agent === "claude") {
-    if (resume && sessionName) {
-      const safe = sessionName.replace(/["\r\n]/g, ""); // 防止破坏命令引号
-      return `claude --resume "${safe}"\r`; // 按会话名精确复原（官方 -r 支持 by name）
-    }
-    return resume ? "claude --resume\r" : `claude${m}${ip}\r`; // 没记到名字 → 退回选择器
+    // 新建不预分配 id（保持命令行干净）；id 由 claude 自生成、HtyBox 启动后捕获。
+    // 复原：有捕获到的 id 则 `claude --resume <id>` 精确复原；无则 `claude --resume` 选择器。
+    if (resume) return sid ? `claude --resume ${sid}\r` : "claude --resume\r";
+    return `claude${m}${ip}\r`;
   }
-  // codex 仅能按 UUID 复原、无法按名 → 复原弹选择器让用户选
-  if (agent === "codex") return resume ? "codex resume\r" : `codex${m}${ip}\r`;
+  // codex 不支持新建时预分配 id（无 --session-id），其 id 由 codex 自生成、HtyBox 启动后捕获。
+  // 复原：有捕获到的 id 则 `codex resume <id>` 按 UUID 精确复原；无则 `codex resume` 选择器。
+  if (agent === "codex") {
+    if (resume) return sid ? `codex resume ${sid}\r` : "codex resume\r";
+    return `codex${m}${ip}\r`;
+  }
   return undefined;
 }
 

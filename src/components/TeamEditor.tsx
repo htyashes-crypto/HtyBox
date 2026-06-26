@@ -8,7 +8,7 @@ import {
 } from "../teams";
 
 const inputCls =
-  "rounded border border-[#e5e2d9] bg-white px-2 py-1 text-xs text-[#191919] outline-none focus:border-[#d4a27f]";
+  "rounded border border-[var(--border)] bg-[var(--elevated)] px-2 py-1 text-xs text-[var(--text)] outline-none focus:border-[var(--accent-border)]";
 
 /** Team 编辑器（M7-G §13.2）：四要素 + 类型→模型联动 datalist + Lead 单选 + 校验。 */
 export default function TeamEditor({
@@ -47,12 +47,12 @@ export default function TeamEditor({
         ))}
       </datalist>
       <div
-        className="flex max-h-[82vh] w-[680px] max-w-full flex-col overflow-hidden rounded-xl border border-[#e5e2d9] bg-[#faf9f5] shadow-2xl"
+        className="flex max-h-[82vh] w-[680px] max-w-full flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] px-4 py-3">
-          <span className="text-sm font-bold text-[#191919]">编辑团队</span>
-          {err && <span className="text-xs text-[#d6453e]">{err}</span>}
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+          <span className="text-sm font-bold text-[var(--text)]">编辑团队</span>
+          {err && <span className="text-xs text-[var(--danger)]">{err}</span>}
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
@@ -72,22 +72,22 @@ export default function TeamEditor({
           </div>
 
           {team.agents.map((a, i) => (
-            <div key={a.id} className="rounded-lg border border-[#e5e2d9] bg-white p-3">
+            <div key={a.id} className="rounded-lg border border-[var(--border)] bg-[var(--elevated)] p-3">
               <div className="mb-2 flex items-center gap-3">
-                <span className="text-xs font-semibold text-[#73726c]">成员 {i + 1}</span>
-                <label className="flex cursor-pointer items-center gap-1 text-xs text-[#c15f3c]">
+                <span className="text-xs font-semibold text-[var(--text-2)]">成员 {i + 1}</span>
+                <label className="flex cursor-pointer items-center gap-1 text-xs text-[var(--accent-text)]">
                   <input
                     type="radio"
                     name="lead"
                     checked={a.isLead}
                     onChange={() => setLead(a.id)}
-                    className="accent-[#d97757]"
+                    className="accent-[var(--accent)]"
                   />
                   Lead（编排者）
                 </label>
                 <button
                   onClick={() => setTeam({ ...team, agents: team.agents.filter((x) => x.id !== a.id) })}
-                  className="ml-auto rounded px-2 py-0.5 text-xs text-[#a8a29a] hover:bg-[#f4f3ee] hover:text-[#d6453e]"
+                  className="ml-auto rounded px-2 py-0.5 text-xs text-[var(--text-3)] hover:bg-[var(--surface)] hover:text-[var(--danger)]"
                 >
                   删除
                 </button>
@@ -126,22 +126,22 @@ export default function TeamEditor({
 
           <button
             onClick={() => setTeam({ ...team, agents: [...team.agents, emptyAgent()] })}
-            className="rounded-md border border-dashed border-[#d4a27f] px-3 py-1.5 text-xs text-[#c15f3c] hover:bg-[#d97757]/8"
+            className="rounded-md border border-dashed border-[var(--accent-border)] px-3 py-1.5 text-xs text-[var(--accent-text)] hover:bg-[var(--accent)]/8"
           >
             + 添加成员
           </button>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[#e5e2d9] bg-[#f4f3ee] px-4 py-2.5">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-4 py-2.5">
           <button
             onClick={onCancel}
-            className="rounded-md border border-[#e5e2d9] px-3 py-1 text-xs text-[#73726c] hover:border-[#d4a27f] hover:text-[#191919]"
+            className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--text-2)] hover:border-[var(--accent-border)] hover:text-[var(--text)]"
           >
             取消
           </button>
           <button
             onClick={save}
-            className="rounded-md bg-[#d97757] px-3 py-1 text-xs font-semibold text-white hover:bg-[#c15f3c]"
+            className="rounded-md bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-white hover:bg-[var(--accent-text)]"
           >
             保存
           </button>

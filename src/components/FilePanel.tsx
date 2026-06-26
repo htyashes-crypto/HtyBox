@@ -62,14 +62,14 @@ const baseName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() || p;
 
 function Chevron({ open }: { open: boolean }) {
   return (
-    <svg className={"h-3 w-3 shrink-0 text-[#9a978f] transition-transform " + (open ? "rotate-90" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+    <svg className={"h-3 w-3 shrink-0 text-[var(--text-faint)] transition-transform " + (open ? "rotate-90" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
   );
 }
 function FolderGlyph() {
-  return <svg className="h-3.5 w-3.5 shrink-0 text-[#c79a6a]" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>;
+  return <svg className="h-3.5 w-3.5 shrink-0 text-[var(--accent-text)]" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>;
 }
 function FileGlyph() {
-  return <svg className="h-3.5 w-3.5 shrink-0 text-[#9a978f]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>;
+  return <svg className="h-3.5 w-3.5 shrink-0 text-[var(--text-faint)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>;
 }
 
 type Clip = { path: string; mode: "cut" | "copy" };
@@ -397,12 +397,12 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           title={entry.path}
           style={{ paddingLeft: pad }}
           className={
-            "flex cursor-pointer items-center gap-1.5 rounded py-1 pr-2 text-[12px] text-[#3a3a37] " +
+            "flex cursor-pointer items-center gap-1.5 rounded py-1 pr-2 text-[12px] text-[var(--text-deep)] " +
             (isDrop
-              ? "bg-[#d97757]/15 ring-1 ring-inset ring-[#d4a27f]"
+              ? "bg-[var(--accent)]/15 ring-1 ring-inset ring-[var(--accent-border)]"
               : isActive
-                ? "bg-[#d97757]/12"
-                : "hover:bg-[#ecebe2]")
+                ? "bg-[var(--accent)]/12"
+                : "hover:bg-[var(--surface-hover)]")
           }
         >
           {entry.isDir ? <Chevron open={isOpen} /> : <span className="w-3 shrink-0" />}
@@ -411,8 +411,8 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
         </div>
         {entry.isDir && isOpen && (
           <>
-            {errors[entry.path] && <div style={{ paddingLeft: pad + 20 }} className="py-0.5 text-[10.5px] text-[#d6453e]">读取失败</div>}
-            {loading.has(entry.path) && !children[entry.path] && <div style={{ paddingLeft: pad + 20 }} className="py-0.5 text-[10.5px] text-[#a8a29a]">加载中…</div>}
+            {errors[entry.path] && <div style={{ paddingLeft: pad + 20 }} className="py-0.5 text-[10.5px] text-[var(--danger)]">读取失败</div>}
+            {loading.has(entry.path) && !children[entry.path] && <div style={{ paddingLeft: pad + 20 }} className="py-0.5 text-[10.5px] text-[var(--text-3)]">加载中…</div>}
             {filterEntries(children[entry.path] ?? [], depth + 1).map((c) => renderNode(c, depth + 1))}
           </>
         )}
@@ -423,7 +423,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
   const rootEntries = filterEntries(children[root] ?? [], 0);
   return (
     <div
-      className="flex h-full flex-col bg-[#f4f3ee]"
+      className="flex h-full flex-col bg-[var(--surface)]"
       onDragOver={(e) => {
         // 只为 OS 文件允许在空白处接收(导入到根)；内部拖拽不在空白处移动 → 防误触移到根目录
         if (e.dataTransfer.types.includes("Files")) e.preventDefault();
@@ -433,20 +433,20 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
       }}
     >
       <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-1.5">
-        <span className="min-w-0 truncate text-[10.5px] text-[#a8a29a]" title={root}>{root || "未打开工作区"}</span>
+        <span className="min-w-0 truncate text-[10.5px] text-[var(--text-3)]" title={root}>{root || "未打开工作区"}</span>
         <div className="flex shrink-0 items-center gap-0.5">
-          <button onClick={() => setShowIgnore(true)} title="忽略名单" className="rounded px-1.5 py-0.5 text-[12px] text-[#73726c] hover:bg-[#ecebe2] hover:text-[#191919]">⊘</button>
-          <button onClick={refresh} title="刷新" className="rounded px-1.5 py-0.5 text-[12px] text-[#73726c] hover:bg-[#ecebe2] hover:text-[#191919]">⟳</button>
+          <button onClick={() => setShowIgnore(true)} title="忽略名单" className="rounded px-1.5 py-0.5 text-[12px] text-[var(--text-2)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">⊘</button>
+          <button onClick={refresh} title="刷新" className="rounded px-1.5 py-0.5 text-[12px] text-[var(--text-2)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">⟳</button>
         </div>
       </div>
       {opErr && (
-        <div className="mx-2.5 mb-1 flex items-start gap-2 rounded-md border border-[#e8c8bb] bg-[#fdf6f2] px-2 py-1.5">
-          <span className="text-[10.5px] leading-relaxed text-[#a05a3a]">{opErr}</span>
-          <button onClick={() => setOpErr(null)} className="ml-auto shrink-0 text-[10px] text-[#a8a29a] hover:text-[#191919]">✕</button>
+        <div className="mx-2.5 mb-1 flex items-start gap-2 rounded-md border border-[var(--accent-border-soft)] bg-[var(--accent-soft)] px-2 py-1.5">
+          <span className="text-[10.5px] leading-relaxed text-[var(--accent-text)]">{opErr}</span>
+          <button onClick={() => setOpErr(null)} className="ml-auto shrink-0 text-[10px] text-[var(--text-3)] hover:text-[var(--text)]">✕</button>
         </div>
       )}
       {importing && (
-        <div className="mx-2.5 mb-1 rounded-md border border-[#d4a27f] bg-[#fdf6f2] px-2 py-1.5 text-[10.5px] text-[#a05a3a]">
+        <div className="mx-2.5 mb-1 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-2 py-1.5 text-[10.5px] text-[var(--accent-text)]">
           正在导入…
         </div>
       )}
@@ -472,8 +472,8 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           className={
             "mx-2.5 mb-1.5 rounded-md border border-dashed px-2 py-2 text-center text-[11px] transition-colors " +
             (rootHot
-              ? "border-[#d97757] bg-[#d97757]/12 text-[#c15f3c]"
-              : "border-[#d4a27f] text-[#a05a3a]")
+              ? "border-[var(--accent)] bg-[var(--accent)]/12 text-[var(--accent-text)]"
+              : "border-[var(--accent-border)] text-[var(--accent-text)]")
           }
         >
           ⬆ 拖到此处 → 移动到根目录
@@ -488,7 +488,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           }}
           onDragLeave={stopScroll}
           className={
-            "hty-scrollhint hty-scrollhint-top absolute inset-x-2.5 top-0 z-10 flex h-7 items-center justify-center overflow-hidden rounded-md border-b border-[#d97757]/30 text-[11px] font-semibold text-[#c15f3c] transition-all duration-200 ease-out " +
+            "hty-scrollhint hty-scrollhint-top absolute inset-x-2.5 top-0 z-10 flex h-7 items-center justify-center overflow-hidden rounded-md border-b border-[var(--accent)]/30 text-[11px] font-semibold text-[var(--accent-text)] transition-all duration-200 ease-out " +
             (dragActive ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-2 opacity-0")
           }
         >
@@ -503,7 +503,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           }}
           onDragLeave={stopScroll}
           className={
-            "hty-scrollhint hty-scrollhint-bottom absolute inset-x-2.5 bottom-0 z-10 flex h-7 items-center justify-center overflow-hidden rounded-md border-t border-[#d97757]/30 text-[11px] font-semibold text-[#c15f3c] transition-all duration-200 ease-out " +
+            "hty-scrollhint hty-scrollhint-bottom absolute inset-x-2.5 bottom-0 z-10 flex h-7 items-center justify-center overflow-hidden rounded-md border-t border-[var(--accent)]/30 text-[11px] font-semibold text-[var(--accent-text)] transition-all duration-200 ease-out " +
             (dragActive ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0")
           }
         >
@@ -515,8 +515,8 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           {/* 收藏文件夹：独立快速跳转区（原树仍照常显示，不隐藏） */}
           {favFolders.length > 0 && (
             <div className="mb-1.5">
-              <div className="flex items-center gap-1.5 px-1.5 pt-1 pb-1 text-[10px] font-semibold tracking-wider text-[#a8a29a] uppercase">
-                <svg className="h-3 w-3 text-[#d97757]" viewBox="0 0 24 24" fill="currentColor">
+              <div className="flex items-center gap-1.5 px-1.5 pt-1 pb-1 text-[10px] font-semibold tracking-wider text-[var(--text-3)] uppercase">
+                <svg className="h-3 w-3 text-[var(--accent)]" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                 </svg>
                 收藏文件夹
@@ -526,29 +526,29 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
                   key={p}
                   onClick={() => revealFolder(p)}
                   title={p}
-                  className="group flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-[12px] text-[#3a3a37] hover:bg-[#ecebe2]"
+                  className="group flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-[12px] text-[var(--text-deep)] hover:bg-[var(--surface-hover)]"
                 >
                   <FolderGlyph />
                   <span className="shrink-0 truncate font-medium">{baseName(p)}</span>
-                  <span className="min-w-0 flex-1 truncate text-[10px] text-[#a8a29a]">{relOf(dirOf(p))}</span>
+                  <span className="min-w-0 flex-1 truncate text-[10px] text-[var(--text-3)]">{relOf(dirOf(p))}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleFavFolder(p);
                     }}
                     title="取消收藏"
-                    className="shrink-0 text-[#cfcbc2] opacity-0 hover:text-[#d6453e] group-hover:opacity-100"
+                    className="shrink-0 text-[var(--text-faint)] opacity-0 hover:text-[var(--danger)] group-hover:opacity-100"
                   >
                     ✕
                   </button>
                 </div>
               ))}
-              <div className="my-1.5 border-t border-[#e5e2d9]" />
+              <div className="my-1.5 border-t border-[var(--border)]" />
             </div>
           )}
-        {errors[root] && <div className="px-2 pt-4 text-center text-[11px] text-[#d6453e]">读取失败：{errors[root]}</div>}
-        {!errors[root] && loading.has(root) && rootEntries.length === 0 && <div className="px-2 pt-6 text-center text-[11px] text-[#a8a29a]">加载中…</div>}
-        {!errors[root] && !loading.has(root) && rootEntries.length === 0 && <div className="px-2 pt-6 text-center text-[11px] text-[#a8a29a]">空目录（可把文件拖到这里）</div>}
+        {errors[root] && <div className="px-2 pt-4 text-center text-[11px] text-[var(--danger)]">读取失败：{errors[root]}</div>}
+        {!errors[root] && loading.has(root) && rootEntries.length === 0 && <div className="px-2 pt-6 text-center text-[11px] text-[var(--text-3)]">加载中…</div>}
+        {!errors[root] && !loading.has(root) && rootEntries.length === 0 && <div className="px-2 pt-6 text-center text-[11px] text-[var(--text-3)]">空目录（可把文件拖到这里）</div>}
         {rootEntries.map((e) => renderNode(e, 0))}
         </div>
       </div>

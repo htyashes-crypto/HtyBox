@@ -1,12 +1,12 @@
 //! M9：列出/删除 claude & codex 的工作区会话（"会话记录"按钮）。已按官方文档 + CLI --help 实证：
-//! - claude：会话存 ~/.claude/projects/<slug>/<id>.jsonl；标题取自 ~/.claude/history.jsonl(project==cwd 的 display)；
+//! - claude：会话存 ~/.claude/projects/<slug>/<id>.jsonl；标题取自会话内最新 ai-title(claude 自动起的会话标题，与 /resume 选择器一致)，回退 history.jsonl 的 display；
 //!   复原 `claude --resume <id>`(须在该 cwd 下跑)；无原生删除 → 删 <id>.jsonl 文件。
 //! - codex：会话 ~/.codex/sessions/Y/M/D/rollout-*.jsonl，首行 session_meta.payload{id,cwd}；
 //!   复原 `codex resume <id>`；删除走删 rollout 文件。
 //! 删除统一移入回收站(trash，非交互、可恢复)。
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -27,7 +27,8 @@ fn home() -> Option<PathBuf> {
 
 const MAX_CODEX_SCAN: usize = 1200; // 最多扫描的 codex rollout 数（按文件名时间倒序）
 
-/// claude：从 ~/.claude/history.jsonl 取本工作区(project==cwd)会话，标题=首条非斜杠提示，时间取最新。
+/// claude：从 ~/.claude/history.jsonl 取本工作区(project==cwd)会话列表与时间；标题(label)取该会话 jsonl
+/// 内最新一条 ai-title(claude 自动生成的会话标题，= /resume 选择器所示)，无则回退首条非斜杠提示。
 pub fn list_claude_sessions(cwd: &str) -> Vec<SessionRef> {
     let Some(h) = home() else {
         return Vec::new();
@@ -73,23 +74,84 @@ pub fn list_claude_sessions(cwd: &str) -> Vec<SessionRef> {
             }
         }
     }
+    // sessionId -> <id>.jsonl 路径映射，标题优先取会话内最新 ai-title，无则回退 history 的 display。
+    let files = session_files(&h);
     let mut out: Vec<SessionRef> = order
         .into_iter()
         .filter_map(|id| {
-            map.get(&id).map(|(label, ts, _)| SessionRef {
-                label: if label.is_empty() {
-                    "(无标题)".into()
-                } else {
-                    label.clone()
-                },
-                id: id.clone(),
-                ts: *ts,
-                path: String::new(),
+            map.get(&id).map(|(display, ts, _)| {
+                let label = files
+                    .get(&id)
+                    .and_then(|p| read_ai_title(p))
+                    .or_else(|| (!display.is_empty()).then(|| display.clone()))
+                    .unwrap_or_else(|| "(无标题)".into());
+                SessionRef {
+                    label,
+                    id: id.clone(),
+                    ts: *ts,
+                    path: String::new(),
+                }
             })
         })
         .collect();
     out.sort_by(|a, b| b.ts.cmp(&a.ts));
     out
+}
+
+/// 建 sessionId -> <id>.jsonl 路径映射（遍历 ~/.claude/projects/*/*.jsonl）。
+fn session_files(home: &Path) -> HashMap<String, PathBuf> {
+    let mut m = HashMap::new();
+    let Ok(dirs) = std::fs::read_dir(home.join(".claude").join("projects")) else {
+        return m;
+    };
+    for d in dirs.flatten() {
+        let Ok(files) = std::fs::read_dir(d.path()) else {
+            continue;
+        };
+        for fe in files.flatten() {
+            let fp = fe.path();
+            if fp.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+                if let Some(stem) = fp.file_stem().and_then(|s| s.to_str()) {
+                    m.entry(stem.to_string()).or_insert(fp);
+                }
+            }
+        }
+    }
+    m
+}
+
+/// 取会话 jsonl 内【最新一条】ai-title(claude 自动生成的会话标题)。
+/// ai-title 每次更新追加写入，最新条在文件末尾附近 → 只反向读末尾约 64KB，避免扫描超大转录文件。
+fn read_ai_title(path: &Path) -> Option<String> {
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    if len == 0 {
+        return None;
+    }
+    let n = len.min(64 * 1024);
+    f.seek(SeekFrom::End(-(n as i64))).ok()?;
+    let mut buf = vec![0u8; n as usize];
+    f.read_exact(&mut buf).ok()?;
+    let text = String::from_utf8_lossy(&buf);
+    // 反向找最后一条 ai-title（首行可能因截断不完整，但末尾的 ai-title 行完整）
+    for line in text.lines().rev() {
+        if !line.contains("\"ai-title\"") {
+            continue;
+        }
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if v.get("type").and_then(|t| t.as_str()) != Some("ai-title") {
+            continue;
+        }
+        if let Some(t) = v.get("aiTitle").and_then(|t| t.as_str()) {
+            let t = t.trim();
+            if !t.is_empty() {
+                return Some(t.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// 删除 claude 会话：① 在 ~/.claude/projects/*/ 下找 <id>.jsonl 移入回收站；
@@ -158,18 +220,9 @@ fn read_head_lines(path: &Path, max: usize) -> Vec<String> {
         .collect()
 }
 
-/// 从一行 codex rollout 取首个 input_text 文本。
-fn extract_input_text(line: &str) -> Option<String> {
-    let v: serde_json::Value = serde_json::from_str(line).ok()?;
-    let content = v.get("payload")?.get("content")?.as_array()?;
-    for item in content {
-        if item.get("type").and_then(|t| t.as_str()) == Some("input_text") {
-            if let Some(t) = item.get("text").and_then(|t| t.as_str()) {
-                return Some(t.to_string());
-            }
-        }
-    }
-    None
+/// codex 会话开头由 CLI 注入的系统消息（非用户真实输入）：以 < 开头的 XML 标签块 / # AGENTS.md 指令。
+fn is_codex_injection(t: &str) -> bool {
+    t.starts_with('<') || t.starts_with("# AGENTS.md")
 }
 
 /// codex：扫 ~/.codex/sessions 的 rollout，session_meta.payload.cwd==cwd 的列出，标题=首条非环境用户消息。
@@ -199,7 +252,7 @@ pub fn list_codex_sessions(cwd: &str) -> Vec<SessionRef> {
 
     let mut out = Vec::new();
     for p in files {
-        let head = read_head_lines(&p, 12);
+        let head = read_head_lines(&p, 30);
         if head.is_empty() {
             continue;
         }
@@ -221,16 +274,38 @@ pub fn list_codex_sessions(cwd: &str) -> Vec<SessionRef> {
         if id.is_empty() {
             continue;
         }
+        // 标题=首条"真实用户消息"：response_item + role=user，跳过 codex 的系统注入(< 标签块 / # AGENTS.md)
         let mut label = String::new();
-        for l in head.iter().skip(1) {
-            if !l.contains("\"input_text\"") {
+        'outer: for l in head.iter().skip(1) {
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(l) else {
+                continue;
+            };
+            if v.get("type").and_then(|t| t.as_str()) != Some("response_item") {
                 continue;
             }
-            if let Some(t) = extract_input_text(l) {
-                if !t.starts_with("<environment_context") {
-                    label = t.chars().take(80).collect();
-                    break;
+            let payload = v.get("payload");
+            if payload.and_then(|p| p.get("role")).and_then(|r| r.as_str()) != Some("user") {
+                continue;
+            }
+            let Some(content) = payload
+                .and_then(|p| p.get("content"))
+                .and_then(|c| c.as_array())
+            else {
+                continue;
+            };
+            for item in content {
+                if item.get("type").and_then(|t| t.as_str()) != Some("input_text") {
+                    continue;
                 }
+                let Some(t) = item.get("text").and_then(|x| x.as_str()) else {
+                    continue;
+                };
+                let t = t.trim();
+                if t.is_empty() || is_codex_injection(t) {
+                    continue;
+                }
+                label = t.chars().take(80).collect();
+                break 'outer;
             }
         }
         out.push(SessionRef {
@@ -261,4 +336,117 @@ pub fn delete_codex_session(path: &str) -> Result<(), String> {
         return Err("会话文件不存在".into());
     }
     trash::delete(p).map_err(|e| e.to_string())
+}
+
+// ---------------- 运行后捕获 agent 自生成的 session id ----------------
+
+/// Windows 路径规范化比较：统一分隔符、去尾分隔符、忽略大小写。
+fn same_path(a: &str, b: &str) -> bool {
+    let norm = |s: &str| s.replace('/', "\\").trim_end_matches('\\').to_lowercase();
+    norm(a) == norm(b)
+}
+
+/// 捕获某 agent(claude/codex) 在 cwd 下、启动时刻(since_ms)之后新生成的会话 id（按时间升序）。
+/// claude/codex 都不便在新建时预分配 id，故新建发裸命令、启动后由此关联各自终端的真实 session id。
+pub fn capture_session_ids(agent: &str, cwd: &str, since_ms: i64) -> Vec<String> {
+    match agent {
+        "claude" => capture_claude_ids(cwd, since_ms),
+        "codex" => capture_codex_ids(cwd, since_ms),
+        _ => Vec::new(),
+    }
+}
+
+/// claude：读 ~/.claude/sessions/<pid>.json（运行中会话状态，含 sessionId/cwd/startedAt/kind），
+/// 取 cwd 匹配、startedAt>=since、interactive 的 sessionId，按 startedAt 升序。
+fn capture_claude_ids(cwd: &str, since_ms: i64) -> Vec<String> {
+    let Some(h) = home() else {
+        return Vec::new();
+    };
+    let Ok(rd) = std::fs::read_dir(h.join(".claude").join("sessions")) else {
+        return Vec::new();
+    };
+    let mut hits: Vec<(i64, String)> = Vec::new();
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.extension().and_then(|x| x.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(txt) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) else {
+            continue;
+        };
+        if v.get("cwd").and_then(|c| c.as_str()).map(|c| same_path(c, cwd)) != Some(true) {
+            continue;
+        }
+        let started = v.get("startedAt").and_then(|t| t.as_i64()).unwrap_or(0);
+        if started < since_ms {
+            continue;
+        }
+        if v.get("kind").and_then(|k| k.as_str()) != Some("interactive") {
+            continue; // 排除 print/exec 等一次性会话
+        }
+        if let Some(id) = v.get("sessionId").and_then(|s| s.as_str()) {
+            hits.push((started, id.to_string()));
+        }
+    }
+    hits.sort_by_key(|(t, _)| *t);
+    hits.into_iter().map(|(_, id)| id).collect()
+}
+
+/// codex：扫 ~/.codex/sessions rollout，取 session_meta.payload.cwd 匹配、文件 mtime>=since 的 id，按 mtime 升序。
+fn capture_codex_ids(cwd: &str, since_ms: i64) -> Vec<String> {
+    let Some(h) = home() else {
+        return Vec::new();
+    };
+    let root = h.join(".codex").join("sessions");
+    if !root.is_dir() {
+        return Vec::new();
+    }
+    let mut hits: Vec<(i64, String)> = Vec::new();
+    for entry in WalkDir::new(&root)
+        .max_depth(5)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        let p = entry.path();
+        let is_rollout = p
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.starts_with("rollout-") && n.ends_with(".jsonl"))
+            .unwrap_or(false);
+        if !is_rollout {
+            continue;
+        }
+        let mt = mtime_ms(p);
+        if mt < since_ms {
+            continue;
+        }
+        let head = read_head_lines(p, 1);
+        let Some(first) = head.first() else {
+            continue;
+        };
+        let Ok(meta) = serde_json::from_str::<serde_json::Value>(first) else {
+            continue;
+        };
+        if meta.get("type").and_then(|t| t.as_str()) != Some("session_meta") {
+            continue;
+        }
+        let payload = meta.get("payload");
+        if payload
+            .and_then(|pl| pl.get("cwd"))
+            .and_then(|c| c.as_str())
+            .map(|c| same_path(c, cwd))
+            != Some(true)
+        {
+            continue;
+        }
+        if let Some(id) = payload.and_then(|pl| pl.get("id")).and_then(|i| i.as_str()) {
+            hits.push((mt, id.to_string()));
+        }
+    }
+    hits.sort_by_key(|(t, _)| *t);
+    hits.into_iter().map(|(_, id)| id).collect()
 }

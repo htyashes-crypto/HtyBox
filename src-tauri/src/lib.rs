@@ -230,6 +230,12 @@ fn delete_codex_session(path: String) -> Result<(), String> {
     sessions::delete_codex_session(&path)
 }
 
+/// 运行后捕获 agent(claude/codex) 在 cwd 下、启动时刻之后新生成的会话 id（前端关联终端用）。
+#[tauri::command]
+fn capture_session_ids(agent: String, cwd: String, since_ms: i64) -> Vec<String> {
+    sessions::capture_session_ids(&agent, &cwd, since_ms)
+}
+
 /// M7-A：返回本地 MCP broker 的端点 URL（agent 的 .mcp.json 指向它）。
 #[tauri::command]
 fn mcp_broker_url(state: State<'_, AppState>) -> String {
@@ -407,6 +413,7 @@ pub fn run() {
             list_codex_sessions,
             delete_claude_session,
             delete_codex_session,
+            capture_session_ids,
             mcp_broker_url,
             setup_mcp_agent,
             write_agent_brief,

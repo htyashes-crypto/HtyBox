@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Allotment } from "allotment";
 import Sidebar from "./components/Sidebar";
 import TerminalDock, { markWorkspaceClosing } from "./components/TerminalDock";
+import ContextMenu from "./components/ui/ContextMenu";
 import Welcome, { type RecentFolder } from "./components/Welcome";
 import SettingsModal from "./components/SettingsModal";
 import CollabModal from "./components/CollabModal";
@@ -116,6 +117,7 @@ export default function App() {
   const [splitSizes] = useState(loadSplit); // 分栏宽度（持久化）
   const [update, setUpdate] = useState<Update | null>(null); // 可用更新（null=无）
   const [showUpdate, setShowUpdate] = useState(false); // 更新弹窗开关
+  const [wsMenu, setWsMenu] = useState<{ x: number; y: number; id: string } | null>(null);
 
   useEffect(() => {
     try {
@@ -208,12 +210,12 @@ export default function App() {
   }, []);
 
   return (
-    <div className="relative flex h-screen w-screen flex-col bg-[#faf9f5] text-[#191919]">
+    <div className="relative flex h-screen w-screen flex-col bg-[var(--bg)] text-[var(--text)]">
       {/* 顶部：品牌(回欢迎页) + 工作区标签 + 多 Agent（无活动工作区时隐藏） */}
       {active && (
         <div
           data-tauri-drag-region
-          className="relative z-20 flex h-11 shrink-0 items-center gap-2 border-b border-[#e5e2d9] bg-[#f4f3ee] pl-3 select-none"
+          className="relative z-20 flex h-11 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] pl-3 select-none"
         >
           <div className="relative">
             <button
@@ -227,9 +229,9 @@ export default function App() {
               <button
                 onClick={() => setShowUpdate(true)}
                 title={`发现新版本 v${update.version}，点击更新`}
-                className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#3aa655] text-white shadow ring-2 ring-[#f4f3ee]"
+                className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--success)] text-white shadow ring-2 ring-[var(--surface)]"
               >
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#3aa655] opacity-60" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--success)] opacity-60" />
                 <svg className="relative h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 19V5M5 12l7-7 7 7" />
                 </svg>
@@ -246,24 +248,19 @@ export default function App() {
                     setActiveId(w.id);
                     setOpened((s) => (s.has(w.id) ? s : new Set(s).add(w.id)));
                   }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setWsMenu({ x: e.clientX, y: e.clientY, id: w.id });
+                  }}
                   title={w.path}
                   className={
-                    "group flex cursor-pointer items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors " +
+                    "flex cursor-pointer items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors " +
                     (isActive
-                      ? "border border-[#e5e2d9] border-t-2 border-t-[#d97757] bg-white text-[#191919]"
-                      : "border border-[#e5e2d9] text-[#73726c] hover:bg-white hover:text-[#191919]")
+                      ? "border border-[var(--border)] border-t-2 border-t-[var(--accent)] bg-[var(--elevated)] text-[var(--text)]"
+                      : "border border-[var(--border)] text-[var(--text-2)] hover:bg-[var(--elevated)] hover:text-[var(--text)]")
                   }
                 >
                   <span className="max-w-[140px] truncate">{w.name}</span>
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      closeWs(w.id);
-                    }}
-                    className="ml-0.5 rounded text-[#a8a29a] opacity-0 transition-opacity hover:text-[#191919] group-hover:opacity-100"
-                  >
-                    ✕
-                  </span>
                 </div>
               );
             })}
@@ -271,20 +268,20 @@ export default function App() {
               <button
                 onClick={() => setShowWsPicker((v) => !v)}
                 title="打开工作区"
-                className="flex h-6 w-6 items-center justify-center rounded text-lg leading-none text-[#73726c] transition-colors hover:bg-white hover:text-[#191919]"
+                className="flex h-6 w-6 items-center justify-center rounded text-lg leading-none text-[var(--text-2)] transition-colors hover:bg-[var(--elevated)] hover:text-[var(--text)]"
               >
                 +
               </button>
               {showWsPicker && (
                 <>
                   <div className="fixed inset-0 z-[60]" onClick={() => setShowWsPicker(false)} />
-                  <div className="absolute left-0 top-full z-[61] mt-1.5 w-72 overflow-hidden rounded-xl border border-[#e5e2d9] bg-white py-1.5 shadow-2xl">
+                  <div className="absolute left-0 top-full z-[61] mt-1.5 w-72 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--elevated)] py-1.5 shadow-2xl">
                     <button
                       onClick={pickFolder}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] font-semibold text-[#191919] hover:bg-[#f4f3ee]"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] font-semibold text-[var(--text)] hover:bg-[var(--surface)]"
                     >
                       <svg
-                        className="h-4 w-4 shrink-0 text-[#d97757]"
+                        className="h-4 w-4 shrink-0 text-[var(--accent)]"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -298,8 +295,8 @@ export default function App() {
                     </button>
                     {recents.length > 0 && (
                       <>
-                        <div className="my-1 border-t border-[#eeece4]" />
-                        <div className="px-3 pt-1 pb-1 text-[10px] font-semibold tracking-wider text-[#a8a29a] uppercase">
+                        <div className="my-1 border-t border-[var(--border-soft)]" />
+                        <div className="px-3 pt-1 pb-1 text-[10px] font-semibold tracking-wider text-[var(--text-3)] uppercase">
                           最近
                         </div>
                         <div className="max-h-72 overflow-y-auto">
@@ -313,17 +310,17 @@ export default function App() {
                                   setShowWsPicker(false);
                                 }}
                                 title={r.path}
-                                className="flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-[#f4f3ee]"
+                                className="flex w-full flex-col gap-0.5 px-3 py-1.5 text-left hover:bg-[var(--surface)]"
                               >
                                 <div className="flex w-full items-center gap-2">
-                                  <span className="truncate text-[12.5px] text-[#191919]">{r.name}</span>
+                                  <span className="truncate text-[12.5px] text-[var(--text)]">{r.name}</span>
                                   {isOpen && (
-                                    <span className="ml-auto shrink-0 rounded bg-[#ecebe2] px-1 py-px text-[9px] font-medium text-[#8c8a82]">
+                                    <span className="ml-auto shrink-0 rounded bg-[var(--surface-hover)] px-1 py-px text-[9px] font-medium text-[var(--text-faint)]">
                                       已打开
                                     </span>
                                   )}
                                 </div>
-                                <span className="truncate font-mono text-[10px] text-[#a8a29a]">{r.path}</span>
+                                <span className="truncate font-mono text-[10px] text-[var(--text-3)]">{r.path}</span>
                               </button>
                             );
                           })}
@@ -339,14 +336,14 @@ export default function App() {
             <button
               onClick={() => setShowSettings(true)}
               title="设置"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[#73726c] transition-colors hover:bg-white hover:text-[#191919]"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--text-2)] transition-colors hover:bg-[var(--elevated)] hover:text-[var(--text)]"
             >
               <GearIcon />
             </button>
             <button
               onClick={() => setShowCollab(true)}
               title="Agent Team：团队库 / 配置 / 一键开启"
-              className="cursor-pointer rounded-md border border-[#e8c8bb] bg-[#d97757]/12 px-3 py-1 text-xs font-semibold text-[#c15f3c] transition-colors hover:bg-[#d97757]/20"
+              className="cursor-pointer rounded-md border border-[var(--accent-border-soft)] bg-[var(--accent)]/12 px-3 py-1 text-xs font-semibold text-[var(--accent-text)] transition-colors hover:bg-[var(--accent)]/20"
             >
               Agent Team
             </button>
@@ -363,7 +360,7 @@ export default function App() {
             {active ? (
               <Sidebar workspacePath={active.path} workspaceSlug={active.id} />
             ) : (
-              <div className="h-full bg-[#f4f3ee]" />
+              <div className="h-full bg-[var(--surface)]" />
             )}
           </Allotment.Pane>
           <Allotment.Pane minSize={400}>
@@ -392,7 +389,7 @@ export default function App() {
 
       {/* 底部状态栏 */}
       {active && (
-        <div className="flex h-6 shrink-0 items-center gap-2 border-t border-[#e5e2d9] bg-[#f4f3ee] px-3 text-[10px] text-[#8c8a82]">
+        <div className="flex h-6 shrink-0 items-center gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-3 text-[10px] text-[var(--text-faint)]">
           <span className="truncate font-mono">{active.path}</span>
           <span className="ml-auto shrink-0">
             {openWs.length} 个工作区 · HtyBox v0.1
@@ -438,6 +435,19 @@ export default function App() {
 
       {/* 自更新：发现新版本弹窗（更新日志 + 跳过/立刻更新 + 下载安装重启） */}
       {showUpdate && update && <UpdateModal update={update} onDismiss={dismissUpdate} />}
+
+      {/* 工作区标签右键菜单（关闭工作区，移出标签防误触） */}
+      {wsMenu && (
+        <ContextMenu
+          x={wsMenu.x}
+          y={wsMenu.y}
+          items={[{ id: "close", label: "关闭工作区", danger: true }]}
+          onAction={(id) => {
+            if (id === "close") closeWs(wsMenu.id);
+          }}
+          onClose={() => setWsMenu(null)}
+        />
+      )}
 
       {/* M7-B 半自动唤醒提示（全局监听 broker 的 agent-wake） */}
       <WakeToasts />

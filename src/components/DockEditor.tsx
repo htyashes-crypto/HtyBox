@@ -8,7 +8,7 @@ import { emitActiveFile } from "../dockBus";
 // 透明图棋盘格背景（SVG / 图片预览共用）。
 const CHECKER_BG: React.CSSProperties = {
   backgroundImage:
-    "linear-gradient(45deg,#eceae3 25%,transparent 25%),linear-gradient(-45deg,#eceae3 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eceae3 75%),linear-gradient(-45deg,transparent 75%,#eceae3 75%)",
+    "linear-gradient(45deg,var(--checker) 25%,transparent 25%),linear-gradient(-45deg,var(--checker) 25%,transparent 25%),linear-gradient(45deg,transparent 75%,var(--checker) 75%),linear-gradient(-45deg,transparent 75%,var(--checker) 75%)",
   backgroundSize: "18px 18px",
   backgroundPosition: "0 0,0 9px,9px -9px,-9px 0",
 };
@@ -61,6 +61,7 @@ export default function DockEditor(
   const isSvg = /\.svg$/i.test(path);
   const previewable = isMd || isSvg;
   const [view, setView] = useState<"edit" | "preview">(isSvg ? "preview" : "edit");
+  const [imgFailed, setImgFailed] = useState(false); // SVG <img> 渲染失败(onError)安全网标志
   const html = useMemo(
     () => (isMd ? (marked.parse(buf.content, { async: false }) as string) : ""),
     [isMd, buf.content],
@@ -69,6 +70,20 @@ export default function DockEditor(
     () => (isSvg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buf.content)}` : ""),
     [isSvg, buf.content],
   );
+  // SVG 良构性校验:DOMParser 解析失败时 Chromium 会插入 <parsererror>,取其错误明细作诊断(无错为 null)。
+  // 与位图分支的 {ok, reason} 失败 UI 对齐:把真实 XML 错误如实暴露,而非静默退化成碎图图标。
+  const svgError = useMemo<string | null>(() => {
+    if (!isSvg || !buf.loaded || !buf.content.trim()) return null;
+    const doc = new DOMParser().parseFromString(buf.content, "image/svg+xml");
+    const errNode = doc.querySelector("parsererror");
+    if (!errNode) return null;
+    const detail = errNode.querySelector("div")?.textContent; // Chromium 把"error on line…"明细放在内层 div
+    return (detail || errNode.textContent || "SVG 解析失败").replace(/\s+/g, " ").trim();
+  }, [isSvg, buf.loaded, buf.content]);
+  // 内容变化时复位 <img> 渲染失败标志,让修正后的 SVG 重新尝试渲染。
+  useEffect(() => {
+    setImgFailed(false);
+  }, [buf.content]);
 
   // 图片：读 base64 data URL（跳过文本加载，避免落到「二进制不支持编辑」）。
   useEffect(() => {
@@ -222,17 +237,17 @@ export default function DockEditor(
   // 图片：只读预览（棋盘格背景居中、object-contain；header 显示文件名 + 像素尺寸）。
   if (isImage) {
     return (
-      <div className="flex h-full flex-col bg-[#faf9f5]">
-        <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e2d9] px-3 py-1.5">
-          <span className="min-w-0 flex-1 truncate text-[12px] text-[#3a3a37]">{basename(path)}</span>
+      <div className="flex h-full flex-col bg-[var(--bg)]">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-1.5">
+          <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--text-deep)]">{basename(path)}</span>
           {nat && (
-            <span className="shrink-0 text-[10.5px] text-[#a8a29a]">
+            <span className="shrink-0 text-[10.5px] text-[var(--text-3)]">
               {nat.w} × {nat.h}
             </span>
           )}
         </div>
         {img && !img.ok ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center text-[12px] text-[#a8a29a]">
+          <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center text-[12px] text-[var(--text-3)]">
             {img.reason ?? "无法预览此图片"}
           </div>
         ) : (
@@ -258,37 +273,37 @@ export default function DockEditor(
 
   if (buf.loaded && !buf.editable) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 bg-[#faf9f5] p-6 text-center">
-        <div className="text-[13px] font-semibold text-[#73726c]">{basename(path)}</div>
-        <div className="text-[12px] text-[#a8a29a]">{buf.reason ?? "不支持编辑此文件"}</div>
+      <div className="flex h-full flex-col items-center justify-center gap-2 bg-[var(--bg)] p-6 text-center">
+        <div className="text-[13px] font-semibold text-[var(--text-2)]">{basename(path)}</div>
+        <div className="text-[12px] text-[var(--text-3)]">{buf.reason ?? "不支持编辑此文件"}</div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#faf9f5]">
-      <div className="flex shrink-0 items-center gap-2 border-b border-[#e5e2d9] px-3 py-1.5">
-        <span className="min-w-0 flex-1 truncate text-[12px] text-[#3a3a37]">
-          {buf.dirty && <span className="mr-1 text-[#d97757]">●</span>}
+    <div className="flex h-full flex-col bg-[var(--bg)]">
+      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-1.5">
+        <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--text-deep)]">
+          {buf.dirty && <span className="mr-1 text-[var(--accent)]">●</span>}
           {basename(path)}
         </span>
         {previewable && (
-          <div className="flex shrink-0 overflow-hidden rounded-md border border-[#e5e2d9] text-[10.5px]">
+          <div className="flex shrink-0 overflow-hidden rounded-md border border-[var(--border)] text-[10.5px]">
             <button
               onClick={() => setView("edit")}
-              className={"px-2 py-0.5 " + (view === "edit" ? "bg-[#d97757] text-white" : "text-[#73726c] hover:bg-[#f4f3ee]")}
+              className={"px-2 py-0.5 " + (view === "edit" ? "bg-[var(--accent)] text-white" : "text-[var(--text-2)] hover:bg-[var(--surface)]")}
             >
               编辑
             </button>
             <button
               onClick={() => setView("preview")}
-              className={"px-2 py-0.5 " + (view === "preview" ? "bg-[#d97757] text-white" : "text-[#73726c] hover:bg-[#f4f3ee]")}
+              className={"px-2 py-0.5 " + (view === "preview" ? "bg-[var(--accent)] text-white" : "text-[var(--text-2)] hover:bg-[var(--surface)]")}
             >
               预览
             </button>
           </div>
         )}
-        {err && <span className="shrink-0 truncate text-[10.5px] text-[#d6453e]">{err}</span>}
+        {err && <span className="shrink-0 truncate text-[10.5px] text-[var(--danger)]">{err}</span>}
         <button
           onClick={save}
           disabled={!buf.dirty}
@@ -296,25 +311,25 @@ export default function DockEditor(
           className={
             "shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold " +
             (buf.dirty
-              ? "bg-[#d97757] text-white hover:bg-[#c15f3c]"
-              : "bg-[#ecebe2] text-[#a8a29a]")
+              ? "bg-[var(--accent)] text-white hover:bg-[var(--accent-text)]"
+              : "bg-[var(--surface-hover)] text-[var(--text-3)]")
           }
         >
           保存
         </button>
       </div>
       {externalChanged && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-[#e8c8bb] bg-[#fdf6f2] px-3 py-1.5">
-          <span className="min-w-0 flex-1 text-[10.5px] text-[#a05a3a]">文件已被外部修改，本地有未保存的改动。</span>
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--accent-border-soft)] bg-[var(--accent-soft)] px-3 py-1.5">
+          <span className="min-w-0 flex-1 text-[10.5px] text-[var(--accent-text)]">文件已被外部修改，本地有未保存的改动。</span>
           <button
             onClick={reloadFromDisk}
-            className="shrink-0 rounded-md bg-[#d97757] px-2 py-0.5 text-[10.5px] font-semibold text-white hover:bg-[#c15f3c]"
+            className="shrink-0 rounded-md bg-[var(--accent)] px-2 py-0.5 text-[10.5px] font-semibold text-white hover:bg-[var(--accent-text)]"
           >
             重载（放弃本地修改）
           </button>
           <button
             onClick={() => setExternalChanged(false)}
-            className="shrink-0 text-[10px] text-[#a8a29a] hover:text-[#191919]"
+            className="shrink-0 text-[10px] text-[var(--text-3)] hover:text-[var(--text)]"
           >
             忽略
           </button>
@@ -322,15 +337,30 @@ export default function DockEditor(
       )}
       {previewable && view === "preview" ? (
         isSvg ? (
-          <div
-            className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4"
-            style={CHECKER_BG}
-          >
-            <img src={svgUrl} alt={basename(path)} className="max-h-full max-w-full object-contain" />
-          </div>
+          svgError || imgFailed ? (
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-auto p-6 text-center">
+              <div className="text-[12px] font-semibold text-[var(--text-2)]">SVG 无法预览(XML 解析错误)</div>
+              <div className="max-w-full whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[var(--text-3)]">
+                {svgError ?? "SVG 渲染失败"}
+              </div>
+              <div className="text-[10.5px] text-[var(--text-3)]">切到「编辑」查看并修复后,回到「预览」即自动重试。</div>
+            </div>
+          ) : (
+            <div
+              className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4"
+              style={CHECKER_BG}
+            >
+              <img
+                src={svgUrl}
+                alt={basename(path)}
+                onError={() => setImgFailed(true)}
+                className="max-h-full max-w-full object-contain"
+              />
+            </div>
+          )
         ) : (
           <div
-            className="md-preview min-h-0 flex-1 overflow-y-auto p-4 text-[13px] text-[#191919]"
+            className="md-preview min-h-0 flex-1 overflow-y-auto p-4 text-[13px] text-[var(--text)]"
             dangerouslySetInnerHTML={{ __html: html }}
           />
         )
@@ -341,7 +371,7 @@ export default function DockEditor(
           onKeyDown={onKeyDown}
           spellCheck={false}
           style={{ fontFamily: "var(--app-font)" }}
-          className="min-h-0 flex-1 resize-none border-0 bg-[#faf9f5] p-3 text-[13px] leading-relaxed text-[#191919] outline-none"
+          className="min-h-0 flex-1 resize-none border-0 bg-[var(--bg)] p-3 text-[13px] leading-relaxed text-[var(--text)] outline-none"
         />
       )}
     </div>

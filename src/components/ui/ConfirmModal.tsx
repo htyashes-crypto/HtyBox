@@ -14,11 +14,11 @@ export default function ConfirmModal({
 }) {
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div className="w-[360px] max-w-[90vw] rounded-2xl bg-white p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-1 text-sm font-semibold text-[#191919]">{title}</div>
-        {message && <div className="mb-3 text-[12px] leading-relaxed text-[#73726c]">{message}</div>}
+      <div className="w-[360px] max-w-[90vw] rounded-2xl bg-[var(--elevated)] p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 text-sm font-semibold text-[var(--text)]">{title}</div>
+        {message && <div className="mb-3 text-[12px] leading-relaxed text-[var(--text-2)]">{message}</div>}
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-md px-3 py-1 text-[12px] text-[#73726c] hover:bg-[#f4f3ee]">
+          <button onClick={onClose} className="rounded-md px-3 py-1 text-[12px] text-[var(--text-2)] hover:bg-[var(--surface)]">
             取消
           </button>
           <button
@@ -26,7 +26,7 @@ export default function ConfirmModal({
               onConfirm();
               onClose();
             }}
-            className="rounded-md bg-[#d6453e] px-3 py-1 text-[12px] font-semibold text-white hover:bg-[#c13a34]"
+            className="rounded-md bg-[var(--danger)] px-3 py-1 text-[12px] font-semibold text-white hover:bg-[var(--danger-hover)]"
           >
             {confirmText}
           </button>

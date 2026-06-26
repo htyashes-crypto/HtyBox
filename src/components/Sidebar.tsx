@@ -86,10 +86,10 @@ export default function Sidebar({
 }) {
   const [tab, setTab] = useState<Tab>("skill");
   return (
-    <div className="flex h-full flex-col bg-[#f4f3ee]">
+    <div className="flex h-full flex-col bg-[var(--surface)]">
       {/* 分段切换条（FanBox 风格） */}
       <div className="p-2">
-        <div className="flex gap-1 rounded-xl bg-[#ecebe2] p-1">
+        <div className="flex gap-1 rounded-xl bg-[var(--surface-hover)] p-1">
           {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
@@ -100,8 +100,8 @@ export default function Sidebar({
                 className={
                   "flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs font-semibold transition-all " +
                   (active
-                    ? "bg-white text-[#191919] shadow-sm"
-                    : "text-[#73726c] hover:text-[#191919]")
+                    ? "bg-[var(--elevated)] text-[var(--text)] shadow-sm"
+                    : "text-[var(--text-2)] hover:text-[var(--text)]")
                 }
               >
                 <Icon />

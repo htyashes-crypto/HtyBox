@@ -53,7 +53,7 @@ export default function QuickOpen({
   return (
     <div className="fixed inset-0 z-[130] flex items-start justify-center bg-black/20 pt-[12vh]" onClick={onClose}>
       <div
-        className="w-[600px] max-w-[92vw] overflow-hidden rounded-xl border border-[#e5e2d9] bg-white shadow-2xl"
+        className="w-[600px] max-w-[92vw] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--elevated)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -74,11 +74,11 @@ export default function QuickOpen({
             }
           }}
           placeholder="搜索文件（按文件名）…"
-          className="w-full border-b border-[#e5e2d9] px-4 py-2.5 text-[14px] outline-none"
+          className="w-full border-b border-[var(--border)] px-4 py-2.5 text-[14px] outline-none"
         />
         <div className="max-h-[50vh] overflow-y-auto py-1">
           {results.length === 0 && (
-            <div className="px-4 py-6 text-center text-[12px] text-[#a8a29a]">
+            <div className="px-4 py-6 text-center text-[12px] text-[var(--text-3)]">
               {all.length === 0 ? "正在索引…" : "无匹配文件"}
             </div>
           )}
@@ -89,23 +89,23 @@ export default function QuickOpen({
               onClick={() => open(f)}
               className={
                 "flex w-full items-baseline gap-2 px-4 py-1.5 text-left " +
-                (i === sel ? "bg-[#d97757]/12" : "hover:bg-[#f4f3ee]")
+                (i === sel ? "bg-[var(--accent)]/12" : "hover:bg-[var(--surface)]")
               }
             >
-              <span className="shrink-0 text-[13px] text-[#191919]">{f.name}</span>
-              <span className="min-w-0 flex-1 truncate text-[11px] text-[#a8a29a]">{f.rel}</span>
+              <span className="shrink-0 text-[13px] text-[var(--text)]">{f.name}</span>
+              <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--text-3)]">{f.rel}</span>
             </button>
           ))}
         </div>
         {all.length > 0 && (
-          <div className="flex items-center justify-between gap-2 border-t border-[#e5e2d9] px-4 py-1.5 text-[11px] text-[#a8a29a]">
+          <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] px-4 py-1.5 text-[11px] text-[var(--text-3)]">
             <span>
               {all.length < total
                 ? `已索引 ${all.length.toLocaleString()} / 共 ${total.toLocaleString()} 个文件`
                 : `共 ${total.toLocaleString()} 个文件`}
             </span>
             {all.length < total && (
-              <span className="shrink-0 text-[#d97757]">超出上限，部分未索引</span>
+              <span className="shrink-0 text-[var(--accent)]">超出上限，部分未索引</span>
             )}
           </div>
         )}

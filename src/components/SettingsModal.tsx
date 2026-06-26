@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSettings, setSetting } from "../settings";
 import { FONTS, applyFont } from "../fonts";
+import { THEMES, applyTheme, watchSystemTheme } from "../theme";
 import { loadIgnore } from "../fileIgnore";
 import { countWorkspaceFiles } from "../catalog";
 
@@ -10,7 +11,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
       onClick={() => onChange(!on)}
       className={
         "relative h-5 w-9 shrink-0 rounded-full transition-colors " +
-        (on ? "bg-[#d97757]" : "bg-[#d6d3ca]")
+        (on ? "bg-[var(--accent)]" : "bg-[var(--border)]")
       }
     >
       <span
@@ -78,23 +79,23 @@ export default function SettingsModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-[460px] rounded-2xl border border-[#e5e2d9] bg-[#faf9f5] p-5 shadow-2xl"
+        className="w-[460px] rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-5 shadow-2xl"
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-bold text-[#191919]">设置</h2>
+          <h2 className="text-base font-bold text-[var(--text)]">设置</h2>
           <button
             onClick={onClose}
-            className="rounded-md px-2 py-1 text-sm text-[#73726c] transition-colors hover:bg-[#ecebe2] hover:text-[#191919]"
+            className="rounded-md px-2 py-1 text-sm text-[var(--text-2)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
           >
             ✕
           </button>
         </div>
 
         <div className="space-y-1">
-          <div className="flex items-center justify-between gap-4 rounded-lg px-3 py-2.5 transition-colors hover:bg-[#f0eee6]">
+          <div className="flex items-center justify-between gap-4 rounded-lg px-3 py-2.5 transition-colors hover:bg-[var(--surface-soft)]">
             <div className="min-w-0">
-              <div className="text-sm font-medium text-[#191919]">悬浮提示</div>
-              <div className="text-[11px] text-[#8c8a82]">
+              <div className="text-sm font-medium text-[var(--text)]">悬浮提示</div>
+              <div className="text-[11px] text-[var(--text-faint)]">
                 鼠标停留时弹出 Skill / Memory 详情浮层
               </div>
             </div>
@@ -104,10 +105,10 @@ export default function SettingsModal({
             />
           </div>
 
-          <div className="flex items-center justify-between gap-4 rounded-lg px-3 py-2.5 transition-colors hover:bg-[#f0eee6]">
+          <div className="flex items-center justify-between gap-4 rounded-lg px-3 py-2.5 transition-colors hover:bg-[var(--surface-soft)]">
             <div className="min-w-0">
-              <div className="text-sm font-medium text-[#191919]">多 Agent 全自动接力</div>
-              <div className="text-[11px] text-[#8c8a82]">
+              <div className="text-sm font-medium text-[var(--text)]">多 Agent 全自动接力</div>
+              <div className="text-[11px] text-[var(--text-faint)]">
                 开：唤醒自动注入（终端静默后），团队无人工接力跑；关：半自动（弹提示，点击才唤醒）
               </div>
             </div>
@@ -118,8 +119,42 @@ export default function SettingsModal({
           </div>
 
           <div className="rounded-lg px-3 py-2.5">
-            <div className="text-sm font-medium text-[#191919]">界面字体</div>
-            <div className="mb-2.5 text-[11px] text-[#8c8a82]">
+            <div className="text-sm font-medium text-[var(--text)]">外观主题</div>
+            <div className="mb-2.5 text-[11px] text-[var(--text-faint)]">
+              浅色（奶油）/ 深色（暖棕黑）/ 跟随系统；终端配色保持暖深不变
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {THEMES.map((t) => {
+                const on = s.theme === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => {
+                      setSetting("theme", t.key);
+                      applyTheme(t.key);
+                      watchSystemTheme();
+                    }}
+                    className={
+                      "rounded-lg border px-3 py-2 text-left transition-colors " +
+                      (on
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                        : "border-[var(--border)] hover:bg-[var(--surface-soft)]")
+                    }
+                  >
+                    <div className="flex items-center gap-1.5 text-[13px] leading-tight text-[var(--text)]">
+                      {t.label}
+                      {on && <span className="text-[var(--accent)]">✓</span>}
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-[var(--text-faint)]">{t.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-lg px-3 py-2.5">
+            <div className="text-sm font-medium text-[var(--text)]">界面字体</div>
+            <div className="mb-2.5 text-[11px] text-[var(--text-faint)]">
               全局 UI、会话、编辑器、Markdown 预览跟随；终端与代码块保持等宽
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -136,15 +171,15 @@ export default function SettingsModal({
                     className={
                       "rounded-lg border px-3 py-2 text-left transition-colors " +
                       (on
-                        ? "border-[#d97757] bg-[#f7ede8]"
-                        : "border-[#e5e2d9] hover:bg-[#f0eee6]")
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                        : "border-[var(--border)] hover:bg-[var(--surface-soft)]")
                     }
                   >
-                    <div className="flex items-center gap-1.5 text-[15px] leading-tight text-[#191919]">
+                    <div className="flex items-center gap-1.5 text-[15px] leading-tight text-[var(--text)]">
                       {f.label}
-                      {on && <span className="text-[#d97757]">✓</span>}
+                      {on && <span className="text-[var(--accent)]">✓</span>}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-[#8c8a82]">{f.desc}</div>
+                    <div className="mt-0.5 text-[11px] text-[var(--text-faint)]">{f.desc}</div>
                   </button>
                 );
               })}
@@ -152,8 +187,8 @@ export default function SettingsModal({
           </div>
 
           <div className="rounded-lg px-3 py-2.5">
-            <div className="text-sm font-medium text-[#191919]">全局搜索索引上限</div>
-            <div className="mb-2.5 text-[11px] text-[#8c8a82]">
+            <div className="text-sm font-medium text-[var(--text)]">全局搜索索引上限</div>
+            <div className="mb-2.5 text-[11px] text-[var(--text-faint)]">
               双击 Shift 全局搜索一次最多索引的文件数；超出的不会被搜到。默认 10 万
             </div>
             <div className="flex items-center gap-2.5">
@@ -167,11 +202,11 @@ export default function SettingsModal({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                 }}
-                className="w-32 rounded-lg border border-[#e5e2d9] bg-white px-2.5 py-1.5 text-sm text-[#191919] outline-none focus:border-[#d97757]"
+                className="w-32 rounded-lg border border-[var(--border)] bg-[var(--elevated)] px-2.5 py-1.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)]"
               />
               <span
                 className={
-                  "min-w-0 flex-1 text-[11px] " + (over ? "text-[#d97757]" : "text-[#8c8a82]")
+                  "min-w-0 flex-1 text-[11px] " + (over ? "text-[var(--accent)]" : "text-[var(--text-faint)]")
                 }
               >
                 {countLabel}
@@ -180,7 +215,7 @@ export default function SettingsModal({
           </div>
         </div>
 
-        <div className="mt-4 border-t border-[#e5e2d9] pt-3 text-[10px] text-[#a8a29a]">
+        <div className="mt-4 border-t border-[var(--border)] pt-3 text-[10px] text-[var(--text-3)]">
           更多全局设置将陆续加入此处。
         </div>
       </div>

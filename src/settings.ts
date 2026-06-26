@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { FontKey } from "./fontKeys";
+import type { ThemeKey } from "./themeKeys";
 
 /** 全局设置（未来各种开关都加到这里）。持久化在 localStorage。 */
 export interface Settings {
@@ -11,10 +12,12 @@ export interface Settings {
   fontFamily: FontKey;
   /** 全局文件搜索（双击 Shift）一次最多索引的文件数；超出的不进搜索。默认 10 万 */
   maxFiles: number;
+  /** 界面主题：light=浅色奶油 / dark=暖调棕黑 / system=跟随系统。默认 light */
+  theme: ThemeKey;
 }
 
 const KEY = "htybox.settings.v1";
-const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false, fontFamily: "harmony", maxFiles: 100000 };
+const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false, fontFamily: "harmony", maxFiles: 100000, theme: "light" };
 
 function load(): Settings {
   try {

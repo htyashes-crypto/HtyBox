@@ -21,8 +21,8 @@ export default function PromptModal({
   };
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div className="w-[360px] max-w-[90vw] rounded-2xl bg-white p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-2 text-sm font-semibold text-[#191919]">{title}</div>
+      <div className="w-[360px] max-w-[90vw] rounded-2xl bg-[var(--elevated)] p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 text-sm font-semibold text-[var(--text)]">{title}</div>
         <input
           autoFocus
           value={v}
@@ -31,15 +31,15 @@ export default function PromptModal({
             if (e.key === "Enter") submit();
             else if (e.key === "Escape") onClose();
           }}
-          className="w-full rounded-md border border-[#e5e2d9] px-2 py-1.5 text-[13px] outline-none focus:border-[#d4a27f]"
+          className="w-full rounded-md border border-[var(--border)] px-2 py-1.5 text-[13px] outline-none focus:border-[var(--accent-border)]"
         />
         <div className="mt-3 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-md px-3 py-1 text-[12px] text-[#73726c] hover:bg-[#f4f3ee]">
+          <button onClick={onClose} className="rounded-md px-3 py-1 text-[12px] text-[var(--text-2)] hover:bg-[var(--surface)]">
             取消
           </button>
           <button
             onClick={submit}
-            className="rounded-md bg-[#d97757] px-3 py-1 text-[12px] font-semibold text-white hover:bg-[#c15f3c]"
+            className="rounded-md bg-[var(--accent)] px-3 py-1 text-[12px] font-semibold text-white hover:bg-[var(--accent-text)]"
           >
             {confirmText}
           </button>

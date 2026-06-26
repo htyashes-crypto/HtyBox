@@ -59,6 +59,9 @@ export const deleteClaudeSession = (id: string) =>
   invoke<void>("delete_claude_session", { id });
 export const deleteCodexSession = (path: string) =>
   invoke<void>("delete_codex_session", { path });
+/** 运行后捕获 agent(claude/codex) 在 cwd 下、启动时刻(sinceMs)之后新生成的会话 id（按时间升序）。 */
+export const captureSessionIds = (agent: string, cwd: string, sinceMs: number) =>
+  invoke<string[]>("capture_session_ids", { agent, cwd, sinceMs });
 
 export const listProjects = () => invoke<ProjectRef[]>("list_projects");
 

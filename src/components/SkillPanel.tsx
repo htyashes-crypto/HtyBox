@@ -129,8 +129,8 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
       className={
         "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold " +
         (s.enabled
-          ? "text-[#a8a29a] hover:bg-[#f4f3ee] hover:text-[#d6453e]"
-          : "bg-[#d97757] text-white hover:bg-[#c15f3c]")
+          ? "text-[var(--text-3)] hover:bg-[var(--surface)] hover:text-[var(--danger)]"
+          : "bg-[var(--accent)] text-white hover:bg-[var(--accent-text)]")
       }
     >
       {s.enabled ? "下架" : "上架"}
@@ -138,9 +138,9 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
   );
   const preview = (s: ManagedSkill) => (
     <>
-      <div className="text-[13px] font-semibold text-[#191919]">{s.name}</div>
-      <div className="mt-0.5 font-mono text-[10.5px] text-[#c15f3c]">{s.invoke}</div>
-      <div className="mt-1.5 text-[11px] leading-relaxed text-[#73726c]">
+      <div className="text-[13px] font-semibold text-[var(--text)]">{s.name}</div>
+      <div className="mt-0.5 font-mono text-[10.5px] text-[var(--accent-text)]">{s.invoke}</div>
+      <div className="mt-1.5 text-[11px] leading-relaxed text-[var(--text-2)]">
         {s.description || "（无描述）"}
       </div>
     </>
@@ -167,17 +167,17 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
   const activeTpl = templates.find((t) => t.id === activeId) ?? null;
 
   return (
-    <div className="flex h-full flex-col bg-[#f4f3ee]">
+    <div className="flex h-full flex-col bg-[var(--surface)]">
       {/* 模板栏：当前模板 → 下拉切换；⚙ 管理 */}
       <div className="flex items-center gap-1 px-2.5 pt-1.5 pb-1">
         <div className="relative min-w-0 flex-1">
         <button
           onClick={() => setShowPicker((v) => !v)}
           title="切换模板"
-          className="flex w-full items-center gap-1.5 rounded-full bg-[#ecebe2] px-3 py-1 text-[11px] font-semibold text-[#3a3a37] hover:bg-[#e3e1d6]"
+          className="flex w-full items-center gap-1.5 rounded-full bg-[var(--surface-hover)] px-3 py-1 text-[11px] font-semibold text-[var(--text-deep)] hover:bg-[var(--border-soft)]"
         >
           <svg
-            className="h-3 w-3 shrink-0 text-[#d97757]"
+            className="h-3 w-3 shrink-0 text-[var(--accent)]"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -191,7 +191,7 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
             {activeTpl ? activeTpl.name || "（未命名）" : "未选择模板"}
           </span>
           <svg
-            className="h-3 w-3 shrink-0 text-[#a8a29a]"
+            className="h-3 w-3 shrink-0 text-[var(--text-3)]"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -215,7 +215,7 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
         <button
           onClick={() => setShowTpl(true)}
           title="管理模板"
-          className="shrink-0 rounded-md px-1.5 py-0.5 text-[13px] text-[#73726c] hover:bg-[#ecebe2] hover:text-[#191919]"
+          className="shrink-0 rounded-md px-1.5 py-0.5 text-[13px] text-[var(--text-2)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
         >
           ⚙
         </button>
@@ -224,49 +224,49 @@ export default function SkillPanel({ projectDir }: { projectDir: string }) {
         <SearchBox value={q} onChange={setQ} placeholder="搜索本工作区 skill…" />
       </div>
       {note && (
-        <div className="mx-2.5 mb-1.5 flex items-start gap-2 rounded-md border border-[#e8c8bb] bg-[#fdf6f2] px-2 py-1.5">
-          <span className="text-[10.5px] leading-relaxed text-[#a05a3a]">{note}</span>
+        <div className="mx-2.5 mb-1.5 flex items-start gap-2 rounded-md border border-[var(--accent-border-soft)] bg-[var(--accent-soft)] px-2 py-1.5">
+          <span className="text-[10.5px] leading-relaxed text-[var(--accent-text)]">{note}</span>
           <button
             onClick={() => setNote(null)}
-            className="ml-auto shrink-0 text-[10px] text-[#a8a29a] hover:text-[#191919]"
+            className="ml-auto shrink-0 text-[10px] text-[var(--text-3)] hover:text-[var(--text)]"
           >
             ✕
           </button>
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
-        {err && <div className="px-1 text-[11px] text-[#d6453e]">加载失败：{err}</div>}
+        {err && <div className="px-1 text-[11px] text-[var(--danger)]">加载失败：{err}</div>}
         {!err && skills.length === 0 && (
-          <div className="px-1 pt-6 text-center text-[11px] leading-relaxed text-[#a8a29a]">
+          <div className="px-1 pt-6 text-center text-[11px] leading-relaxed text-[var(--text-3)]">
             本工作区没有 skill
             <br />
             <span className="text-[10px]">
-              （放到 <code className="text-[#73726c]">.claude/skills/</code> 下）
+              （放到 <code className="text-[var(--text-2)]">.claude/skills/</code> 下）
             </span>
           </div>
         )}
         {/* 收藏（已上架中被收藏的，单独成区，带 ❤ 标题 + 分隔线） */}
         {favEnabled.length > 0 && (
           <div className="mb-2">
-            <div className="flex items-center gap-1.5 px-1 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[#a8a29a] uppercase">
-              <svg className="h-3 w-3 text-[#d97757]" viewBox="0 0 24 24" fill="currentColor">
+            <div className="flex items-center gap-1.5 px-1 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[var(--text-3)] uppercase">
+              <svg className="h-3 w-3 text-[var(--accent)]" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
               </svg>
               收藏 · {favEnabled.length}
             </div>
             <div className="space-y-1.5">{favEnabled.map(enabledCard)}</div>
-            <div className="my-2.5 border-t border-[#e5e2d9]" />
+            <div className="my-2.5 border-t border-[var(--border)]" />
           </div>
         )}
         {restEnabled.length > 0 && (
-          <div className="mb-1.5 px-1 pt-1 text-[10px] font-semibold tracking-wider text-[#a8a29a] uppercase">
+          <div className="mb-1.5 px-1 pt-1 text-[10px] font-semibold tracking-wider text-[var(--text-3)] uppercase">
             已上架 · {restEnabled.length}
           </div>
         )}
         <div className="space-y-1.5">{restEnabled.map(enabledCard)}</div>
         {disabled.length > 0 && (
           <>
-            <div className="mt-3 mb-1.5 px-1 text-[10px] font-semibold tracking-wider text-[#a8a29a] uppercase">
+            <div className="mt-3 mb-1.5 px-1 text-[10px] font-semibold tracking-wider text-[var(--text-3)] uppercase">
               已下架 · {disabled.length}
             </div>
             <div className="space-y-1.5">

@@ -81,7 +81,7 @@ export default function HtyBoxLogo({
     : {};
 
   return (
-    <svg viewBox="0 0 512 512" width={size} height={size} className={className} {...hover}>
+    <svg viewBox="0 0 512 512" width={size} height={size} className={["hty-logo", className].filter(Boolean).join(" ")} {...hover}>
       {/* 顶部开口内壁 + 中缝(F-T) */}
       <polygon points={`${fp(T)} ${fp(R)} ${fp(F)} ${fp(L)}`} fill="#C75E38" {...face} />
       <line x1={F[0]} y1={F[1]} x2={T[0]} y2={T[1]} {...edge} />

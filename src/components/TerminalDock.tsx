@@ -42,6 +42,8 @@ import DockEditor, { disposeEditorBuf, isEditorDirty } from "./DockEditor";
 import RunConfigBar from "./RunConfigBar";
 import DockActionsMenu from "./DockActionsMenu";
 import { registerDockHost } from "../dockBus";
+import { captureSessionIds } from "../catalog";
+import { getSessionTitle, setSessionTitle, onSessionTitlesChange, splitStatusPrefix } from "../sessionTitles";
 import type { RunConfig } from "../runConfigs";
 
 type TermParams = {
@@ -53,6 +55,7 @@ type TermParams = {
   model?: string; // M7-G：团队成员的模型，新建时拼进 --model
   initialPrompt?: string; // M7-C：新建时的位置 prompt（让 agent 先读协作简报）
   launchCmd?: string; // M9-N8：运行配置的显式启动命令（新建时直接发，不走 launchCmdFor）
+  sessionId?: string; // claude 复原用：新建发 --session-id <uuid>、复原发 --resume <uuid>（见 SESSION_IDS）
 };
 
 const DRAG_MIME = "application/x-htybox-item";
@@ -92,6 +95,55 @@ const saveSN = () => {
   }
 };
 
+// 每个 claude 终端记住它的 session id（=HtyBox 新建时用 `--session-id` 指定的自管 UUID），持久化。
+// 复原时 `claude --resume <id>` 按 id 精确复原 —— 不依赖 OSC 标题、不受标题里 claude 状态符号(✳)影响。
+const SID_KEY = "htybox.sessionIds.v1";
+const SESSION_IDS: Record<string, string> = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(SID_KEY) || "{}");
+  } catch {
+    return {};
+  }
+})();
+const saveSI = () => {
+  try {
+    localStorage.setItem(SID_KEY, JSON.stringify(SESSION_IDS));
+  } catch {
+    /* ignore */
+  }
+};
+// 已被某终端认领的 session id（含复原沿用的），避免并发新建时多个终端抢同一个捕获结果。
+const CLAIMED_SIDS = new Set<string>(Object.values(SESSION_IDS));
+// 新建 agent 终端后：轮询后端捕获该 cwd 下、启动后新生成的真实 session id，认领未占用者存入 SESSION_IDS。
+// claude/codex 都不便预分配 id（保持新建命令行干净），故新建发裸命令、此处捕获真实 id 供日后精确复原。
+async function captureSessionId(
+  termId: string,
+  agentKind: AgentKind,
+  cwd: string,
+): Promise<void> {
+  const since = Date.now() - 3000; // 略提前以容时钟/落盘时延
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    if (SESSION_IDS[termId]) return; // 已被设置则停
+    let ids: string[] = [];
+    try {
+      ids = await captureSessionIds(agentKind, cwd, since);
+    } catch {
+      /* ignore */
+    }
+    const fresh = ids.find((id) => !CLAIMED_SIDS.has(id));
+    if (fresh) {
+      CLAIMED_SIDS.add(fresh);
+      SESSION_IDS[termId] = fresh;
+      saveSI();
+      return;
+    }
+  }
+}
+// 每个终端最近一次 OSC 原始标题(含状态前缀)，供"会话改名"事件刷新 Tab 时复用前缀。
+// 状态前缀拆分(splitStatusPrefix)统一在 ../sessionTitles，与会话名剥离共用一套字符集（含 ✳、运行中动画 · 点等）。
+const LAST_OSC: Record<string, string> = {};
+
 // agent 终端的身份标签(termId→"👑 负责人")。Tab 显示为「身份（会话名）」，不锁死会话名。
 const AL_KEY = "htybox.agentLabels.v1";
 const AGENT_LABELS: Record<string, string> = (() => {
@@ -108,6 +160,32 @@ const saveAL = () => {
     /* ignore */
   }
 };
+
+// 计算并设置某终端 Tab 标题：实时状态前缀(✳/点点) + 显示名。
+// 显示名优先级：会话自定义名(与 Session 列表联动) > 终端级自定义(shell/无 session id) > 会话名(OSC 去前缀)。
+// 有身份(agent)则包成「身份（名）」；claude/codex 保留状态前缀，shell 无前缀。
+function applyTabTitle(
+  termId: string,
+  agentKind: AgentKind,
+  api: { setTitle: (t: string) => void },
+): void {
+  const isAgent = agentKind === "claude" || agentKind === "codex";
+  const [prefix, body] = isAgent
+    ? splitStatusPrefix(LAST_OSC[termId] ?? "")
+    : ["", (LAST_OSC[termId] ?? "").trim()];
+  // 记会话名(去前缀的 body)供回退；滤掉 shell 启动时的 exe 路径标题
+  if (isAgent && body && !/^[a-zA-Z]:[\\/]/.test(body) && SESSION_NAMES[termId] !== body) {
+    SESSION_NAMES[termId] = body;
+    saveSN();
+  }
+  const sid = SESSION_IDS[termId];
+  const custom = isAgent && sid ? getSessionTitle(agentKind, sid) : "";
+  const name = custom || CUSTOM_TITLES[termId] || body || SESSION_NAMES[termId] || "";
+  if (!name) return; // 尚无任何可显示名字 → 不覆盖默认"终端N"
+  const role = AGENT_LABELS[termId];
+  const shown = role ? `${role}（${name}）` : name;
+  api.setTitle(isAgent && prefix ? prefix + shown : shown);
+}
 
 // 本次运行中由布局复原出来的终端 id → 启动时发"复原命令"（claude --resume / codex resume）。
 const RESTORED_IDS = new Set<string>();
@@ -130,19 +208,36 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
   }, [props.api]);
 
   const startRename = () => {
-    setDraft(title);
+    const p = props.params as TermParams & { editorPath?: string };
+    const tid = p.termId;
+    const sid = tid ? SESSION_IDS[tid] : undefined;
+    // 编辑"纯会话名"（不含状态前缀/身份装饰）：避免带出 ✳ 后保留导致与实时前缀重复成两份
+    const pure =
+      (sid && (p.agentKind === "claude" || p.agentKind === "codex")
+        ? getSessionTitle(p.agentKind, sid)
+        : "") ||
+      (tid ? CUSTOM_TITLES[tid] : "") ||
+      (tid ? SESSION_NAMES[tid] : "") ||
+      splitStatusPrefix(title)[1] ||
+      title;
+    setDraft(pure);
     setEditing(true);
   };
   const commit = () => {
     const t = draft.trim();
     if (t) {
-      const key =
-        props.params.termId ??
-        (props.params as { editorPath?: string }).editorPath ??
-        props.api.id;
-      CUSTOM_TITLES[key] = t;
-      saveCT();
-      props.api.setTitle(t);
+      const p = props.params as TermParams & { editorPath?: string };
+      const sid = p.termId ? SESSION_IDS[p.termId] : undefined;
+      if (p.termId && sid && (p.agentKind === "claude" || p.agentKind === "codex")) {
+        // claude/codex 终端：写"会话自定义名"，与 Session 列表联动；OSC 状态前缀仍实时跟随（见 applyTabTitle）
+        setSessionTitle(p.agentKind, sid, t);
+      } else {
+        // shell / session id 未捕获 / 编辑器面板：回退到按终端(或文件)的自定义名
+        const key = p.termId ?? p.editorPath ?? props.api.id;
+        CUSTOM_TITLES[key] = t;
+        saveCT();
+        props.api.setTitle(t);
+      }
     }
     setEditing(false);
   };
@@ -161,7 +256,7 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
           if (e.key === "Enter") commit();
           else if (e.key === "Escape") setEditing(false);
         }}
-        className="my-1 w-[150px] rounded border border-[#d4a27f] bg-white px-1.5 py-0.5 text-xs text-[#191919] outline-none"
+        className="my-1 w-[150px] rounded border border-[var(--accent-border)] bg-[var(--elevated)] px-1.5 py-0.5 text-xs text-[var(--text)] outline-none"
       />
     );
   }
@@ -178,7 +273,7 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
           e.stopPropagation();
           props.api.close();
         }}
-        className="flex h-4 w-4 items-center justify-center rounded text-[13px] leading-none text-[#a8a29a] hover:bg-[#e5e2d9] hover:text-[#191919]"
+        className="flex h-4 w-4 items-center justify-center rounded text-[13px] leading-none text-[var(--text-3)] hover:bg-[var(--border)] hover:text-[var(--text)]"
       >
         ✕
       </span>
@@ -193,59 +288,45 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    // 复原时按"记住的会话名"恢复（claude --resume "<名>"），否则发新建命令
+    // 复原时按 session id 精确复原（claude --resume <uuid>），否则发新建命令
     const restored = RESTORED_IDS.has(termId);
+    // claude 的 session id：复原取持久化的 SESSION_IDS；新建取 params(paramsFor 已生成并存入 SESSION_IDS)
+    const sid = SESSION_IDS[termId] ?? props.params.sessionId;
     const launch =
       !restored && props.params.launchCmd
         ? props.params.launchCmd // M9-N8：运行配置命令直接发
         : launchCmdFor(
             agentKind,
             restored,
-            restored ? SESSION_NAMES[termId] : undefined,
+            sid,
             props.params.model, // 团队成员新建时带 --model
             restored ? undefined : props.params.initialPrompt, // 新建时先读协作简报
           );
     ensureEngine(termId, shell, launch, cwd, env, agentKind);
     attachEngine(termId, c);
 
+    // 新建的空 claude/codex 会话(非复原、非 Session 透传 id)：启动后捕获其真实 session id 供日后精确复原
+    if (!restored && !sid && cwd && (agentKind === "claude" || agentKind === "codex")) {
+      void captureSessionId(termId, agentKind, cwd);
+    }
+
     // dockview 自身的尺寸/可见性事件 → 可靠 refit（比 DOM ResizeObserver 更准；
     // 面板被显示/分屏改变时按真实列宽 fit，避免 TUI 花屏）
     const dimSub = props.api.onDidDimensionsChange(() => refitEngine(termId));
     const visSub = props.api.onDidVisibilityChange(() => refitEngine(termId));
 
-    // 程序设置终端标题(OSC)时：①同步到 Tab（被用户重命名的跳过）②记住会话名供复原
+    // 程序设置终端标题(OSC)时：记下原始标题(含状态前缀)并刷新 Tab。
+    // Tab = 实时状态前缀(✳/点点) + 显示名(会话自定义名 > 终端级自定义 > 会话名)——重命名后状态前缀仍跟随。
     setEngineTitleHandler(termId, (t) => {
-      const title = t.trim();
-      if (!title) return;
-      // 记会话名(供 resume + agent Tab 显示)；滤掉 shell 启动时的 exe 路径标题
-      const isAgent = agentKind === "claude" || agentKind === "codex";
-      if (
-        isAgent &&
-        !/^[a-zA-Z]:[\\/]/.test(title) &&
-        SESSION_NAMES[termId] !== title
-      ) {
-        SESSION_NAMES[termId] = title;
-        saveSN();
-      }
-      // Tab 显示优先级：用户手动重命名 > 身份（会话名） > 会话名
-      if (CUSTOM_TITLES[termId]) return;
-      const role = AGENT_LABELS[termId];
-      if (role) {
-        const sess = SESSION_NAMES[termId];
-        props.api.setTitle(sess ? `${role}（${sess}）` : role);
-      } else {
-        props.api.setTitle(title);
-      }
+      const raw = t.trim();
+      if (!raw) return;
+      LAST_OSC[termId] = raw;
+      applyTabTitle(termId, agentKind, props.api);
     });
-    // 挂载/复原时先把 Tab 摆正：用户重命名 > 身份（会话名） > 保持原标题
-    if (CUSTOM_TITLES[termId]) {
-      props.api.setTitle(CUSTOM_TITLES[termId]);
-    } else if (AGENT_LABELS[termId]) {
-      const sess = SESSION_NAMES[termId];
-      props.api.setTitle(
-        sess ? `${AGENT_LABELS[termId]}（${sess}）` : AGENT_LABELS[termId],
-      );
-    }
+    // 会话自定义名改变(本终端在 Tab 改、或在 Session 列表改同一会话)→ 实时刷新本 Tab
+    const titleSub = onSessionTitlesChange(() => applyTabTitle(termId, agentKind, props.api));
+    // 挂载/复原时先把 Tab 摆正（用已记的自定义名/会话名；都没有则保持默认"终端N"）
+    applyTabTitle(termId, agentKind, props.api);
 
     const onDragOver = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes(DRAG_MIME)) {
@@ -283,6 +364,7 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
       c.removeEventListener("drop", onDrop);
       dimSub.dispose();
       visSub.dispose();
+      titleSub();
       setEngineTitleHandler(termId, undefined);
       detachEngine(termId);
     };
@@ -299,7 +381,7 @@ function ProfileIcon({ id }: { id: string }) {
     );
   if (id === "codex")
     return (
-      <img src={codexIcon} alt="Codex" className="h-4 w-4" draggable={false} />
+      <img src={codexIcon} alt="Codex" className="codex-glyph h-4 w-4" draggable={false} />
     );
   return (
     <svg
@@ -335,15 +417,15 @@ const paramsFor = (p: Profile, id: string, cwd: string): TermParams => ({
 
 /** dock 空态水印：无任何终端/编辑器面板时，奶油底 + hty 盒子 logo + 常用操作提示（Cursor 式）。 */
 function DockWatermark() {
-  const kc = "rounded bg-[#ecebe2] px-1.5 py-0.5 font-mono text-[11px] leading-none text-[#73726c]";
+  const kc = "rounded bg-[var(--surface-hover)] px-1.5 py-0.5 font-mono text-[11px] leading-none text-[var(--text-2)]";
   const row = (label: string, val: React.ReactNode) => (
     <div className="flex items-center justify-between gap-10">
-      <span className="text-[#a8a29a]">{label}</span>
-      <span className="flex items-center gap-1 text-[#8c8a82]">{val}</span>
+      <span className="text-[var(--text-3)]">{label}</span>
+      <span className="flex items-center gap-1 text-[var(--text-faint)]">{val}</span>
     </div>
   );
   return (
-    <div className="flex h-full w-full select-none flex-col items-center justify-center gap-8 bg-[#faf9f5]">
+    <div className="flex h-full w-full select-none flex-col items-center justify-center gap-8 bg-[var(--bg)]">
       <HtyBoxLogo size={128} initial="open" openOnHover />
       <div className="flex w-[268px] flex-col gap-2.5 text-[12.5px]">
         {row("新建终端", <span>点击上方 ▸_ / Claude / Codex</span>)}
@@ -455,6 +537,10 @@ export default function TerminalDock({
         if (SESSION_NAMES[termId]) {
           delete SESSION_NAMES[termId];
           saveSN();
+        }
+        if (SESSION_IDS[termId]) {
+          delete SESSION_IDS[termId];
+          saveSI();
         }
         if (AGENT_LABELS[termId]) {
           delete AGENT_LABELS[termId];
@@ -616,6 +702,11 @@ export default function TerminalDock({
         const api = apiRef.current;
         if (!api) return;
         const id = mkId();
+        // Session 面板复原：记下被复原的 session id，供退出重进后再按 id 精确复原
+        if (opts.sessionId) {
+          SESSION_IDS[id] = opts.sessionId;
+          saveSI();
+        }
         api.addPanel({
           id,
           component: "terminal",
@@ -626,6 +717,7 @@ export default function TerminalDock({
             agentKind: opts.agentKind as AgentKind,
             cwd: opts.cwd || cwd,
             launchCmd: opts.command.replace(/[\r\n]+$/, "") + "\r",
+            sessionId: opts.sessionId,
           },
         });
       },
@@ -635,14 +727,14 @@ export default function TerminalDock({
 
   return (
     <div className="flex h-full w-full flex-col bg-[#1f1e1d]">
-      <div className="flex shrink-0 items-center gap-0.5 border-b border-[#e5e2d9] bg-[#f4f3ee] px-2 py-1.5">
+      <div className="flex shrink-0 items-center gap-0.5 border-b border-[var(--border)] bg-[var(--surface)] px-2 py-1.5">
         {PROFILES.map((p) => (
           <button
             key={p.id}
             onClick={() => addTerminal(p)}
             title={`新建 ${p.label} 终端`}
             style={{ color: p.dotColor }}
-            className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-white"
+            className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--elevated)]"
           >
             <ProfileIcon id={p.id} />
           </button>
