@@ -346,7 +346,8 @@ const SKIP_DIRS: &[&str] = &[
     "MemoryCaptures",
     "UserSettings",
 ];
-const MAX_FILES: usize = 100000;
+// 遍历防爆硬上限：正常工作区（已剔除噪声目录/忽略名单）远不及；仅防病态目录把扫描拖死。
+const HARD_WALK_CAP: usize = 5_000_000;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -356,28 +357,48 @@ pub struct FileRef {
     pub path: String,
 }
 
-/// 递归列工作区所有文件（跳过常见重目录 + 忽略名单的文件夹名/扩展名，上限 MAX_FILES）。
-/// 供 quick-open 前端过滤。skip_folders=忽略的文件夹名，skip_exts=忽略的扩展名(不含点)。
-pub fn list_all_files(
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ListFilesResult {
+    /// 收集到的前 max_files 个文件（供 quick-open 列表/过滤）。
+    pub files: Vec<FileRef>,
+    /// 工作区有效文件真实总数（即使 files 因 max_files 截断也照数完），供前端显示/判断是否截断。
+    pub total: usize,
+}
+
+/// 遍历工作区「有效文件」（统一口径）：跳 SKIP_DIRS（任意层级噪声目录）
+/// + 用户忽略名单 folderset（仅 root 一级目录，与文件树「顶层忽略」一致）
+/// + extset（任意层级按扩展名）。返回 (前 max_collect 个 FileRef, 有效文件真实总数)。
+fn walk_files(
     root: &str,
     skip_folders: Vec<String>,
     skip_exts: Vec<String>,
-) -> Vec<FileRef> {
+    max_collect: usize,
+) -> (Vec<FileRef>, usize) {
     use std::collections::HashSet;
     let root_path = Path::new(root);
     let folderset: HashSet<String> = skip_folders.into_iter().collect();
     let extset: HashSet<String> = skip_exts.into_iter().map(|e| e.to_lowercase()).collect();
     let mut out = Vec::new();
+    let mut total = 0usize;
     let walker = WalkDir::new(root_path).into_iter().filter_entry(|e| {
         if e.file_type().is_dir() {
             if let Some(n) = e.file_name().to_str() {
-                return !(SKIP_DIRS.contains(&n) || folderset.contains(n));
+                // 噪声目录（node_modules/.git/Library/Temp…）：任意层级都跳。
+                if SKIP_DIRS.contains(&n) {
+                    return false;
+                }
+                // 用户忽略名单：仅作用于 root 一级目录（depth==1），与文件树「顶层文件夹忽略」语义对齐；
+                // 否则深层同名目录（如各子工程内的 Packages）会被全层级误杀——文件树看得到却搜不到。
+                if e.depth() == 1 && folderset.contains(n) {
+                    return false;
+                }
             }
         }
         true
     });
     for entry in walker.filter_map(|e| e.ok()) {
-        if out.len() >= MAX_FILES {
+        if total >= HARD_WALK_CAP {
             break;
         }
         if !entry.file_type().is_file() {
@@ -390,6 +411,10 @@ pub fn list_all_files(
                     continue;
                 }
             }
+        }
+        total += 1;
+        if out.len() >= max_collect {
+            continue; // 已达收集上限：只继续计数得真实总数，不再收集 FileRef
         }
         let name = p
             .file_name()
@@ -408,5 +433,27 @@ pub fn list_all_files(
             path: p.to_string_lossy().into_owned(),
         });
     }
-    out
+    (out, total)
+}
+
+/// 列工作区文件供 quick-open：收集前 max_files 个 + 返回有效文件真实总数。
+/// skip_folders=忽略的文件夹名（仅匹配 root 一级目录，与文件树「顶层忽略」一致）；
+/// skip_exts=忽略的扩展名（不含点，作用于所有层级文件）；max_files=收集上限（全局设置，默认 10 万）。
+pub fn list_all_files(
+    root: &str,
+    skip_folders: Vec<String>,
+    skip_exts: Vec<String>,
+    max_files: usize,
+) -> ListFilesResult {
+    let (files, total) = walk_files(root, skip_folders, skip_exts, max_files);
+    ListFilesResult { files, total }
+}
+
+/// 只统计工作区有效文件总数（不收集列表，供设置面板「当前工作区文件数」显示）。
+pub fn count_workspace_files(
+    root: &str,
+    skip_folders: Vec<String>,
+    skip_exts: Vec<String>,
+) -> usize {
+    walk_files(root, skip_folders, skip_exts, 0).1
 }

@@ -185,14 +185,25 @@ fn unwatch_file(path: String) -> Result<(), String> {
     watcher::unwatch_file(&path)
 }
 
-/// M9：递归列工作区所有文件（双击 Shift 全局搜索；排除噪声目录 + 忽略名单）。
+/// M9：递归列工作区文件（双击 Shift 全局搜索）；收集前 max_files 个并返回有效文件真实总数。
 #[tauri::command]
 fn list_all_files(
     root: String,
     skip_folders: Vec<String>,
     skip_exts: Vec<String>,
-) -> Vec<fs_tree::FileRef> {
-    fs_tree::list_all_files(&root, skip_folders, skip_exts)
+    max_files: usize,
+) -> fs_tree::ListFilesResult {
+    fs_tree::list_all_files(&root, skip_folders, skip_exts, max_files)
+}
+
+/// M9：统计当前工作区有效文件总数（设置面板显示，判断是否超出搜索索引上限）。
+#[tauri::command]
+fn count_workspace_files(
+    root: String,
+    skip_folders: Vec<String>,
+    skip_exts: Vec<String>,
+) -> usize {
+    fs_tree::count_workspace_files(&root, skip_folders, skip_exts)
 }
 
 /// M9：列本工作区 claude 会话（取自 ~/.claude/history.jsonl，按 project==cwd）。
@@ -391,6 +402,7 @@ pub fn run() {
             watch_file,
             unwatch_file,
             list_all_files,
+            count_workspace_files,
             list_claude_sessions,
             list_codex_sessions,
             delete_claude_session,

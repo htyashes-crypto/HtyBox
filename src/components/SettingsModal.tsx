@@ -1,5 +1,8 @@
+import { useEffect, useState } from "react";
 import { useSettings, setSetting } from "../settings";
 import { FONTS, applyFont } from "../fonts";
+import { loadIgnore } from "../fileIgnore";
+import { countWorkspaceFiles } from "../catalog";
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -21,8 +24,53 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
 }
 
 /** 全局设置弹窗（Cursor 式）。未来各类全局开关都加到这里。 */
-export default function SettingsModal({ onClose }: { onClose: () => void }) {
+export default function SettingsModal({
+  root,
+  onClose,
+}: {
+  root: string | null;
+  onClose: () => void;
+}) {
   const s = useSettings();
+  const [draft, setDraft] = useState(String(s.maxFiles));
+  const [count, setCount] = useState<number | null>(null);
+  const [counting, setCounting] = useState(false);
+
+  // 打开设置时统计当前工作区有效文件数（与搜索同口径：含忽略名单），供配置上限时参照。
+  useEffect(() => {
+    if (!root) {
+      setCount(null);
+      return;
+    }
+    setCounting(true);
+    const ig = loadIgnore(root);
+    countWorkspaceFiles(root, ig.folders, ig.exts)
+      .then((n) => setCount(n))
+      .catch(() => setCount(null))
+      .finally(() => setCounting(false));
+  }, [root]);
+
+  const commit = () => {
+    const n = Math.round(Number(draft));
+    if (Number.isFinite(n) && n >= 1000) {
+      setSetting("maxFiles", n);
+      setDraft(String(n));
+    } else {
+      setDraft(String(s.maxFiles)); // 非法输入回退到当前值
+    }
+  };
+
+  const over = count !== null && count > s.maxFiles;
+  const countLabel = !root
+    ? "未打开工作区"
+    : counting
+      ? "正在统计当前工作区…"
+      : count === null
+        ? ""
+        : over
+          ? `当前工作区 ${count.toLocaleString()} 个文件 · 超出上限，部分不会被搜索`
+          : `当前工作区 ${count.toLocaleString()} 个文件`;
+
   return (
     <div
       className="absolute inset-0 z-[100] flex items-center justify-center bg-black/30"
@@ -100,6 +148,34 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="rounded-lg px-3 py-2.5">
+            <div className="text-sm font-medium text-[#191919]">全局搜索索引上限</div>
+            <div className="mb-2.5 text-[11px] text-[#8c8a82]">
+              双击 Shift 全局搜索一次最多索引的文件数；超出的不会被搜到。默认 10 万
+            </div>
+            <div className="flex items-center gap-2.5">
+              <input
+                type="number"
+                min={1000}
+                step={10000}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+                className="w-32 rounded-lg border border-[#e5e2d9] bg-white px-2.5 py-1.5 text-sm text-[#191919] outline-none focus:border-[#d97757]"
+              />
+              <span
+                className={
+                  "min-w-0 flex-1 text-[11px] " + (over ? "text-[#d97757]" : "text-[#8c8a82]")
+                }
+              >
+                {countLabel}
+              </span>
             </div>
           </div>
         </div>

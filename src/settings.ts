@@ -9,10 +9,12 @@ export interface Settings {
   autoRelay: boolean;
   /** 界面字体：全局 UI/会话/编辑器/预览跟随（终端等宽不受影响）。默认鸿蒙 */
   fontFamily: FontKey;
+  /** 全局文件搜索（双击 Shift）一次最多索引的文件数；超出的不进搜索。默认 10 万 */
+  maxFiles: number;
 }
 
 const KEY = "htybox.settings.v1";
-const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false, fontFamily: "harmony" };
+const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false, fontFamily: "harmony", maxFiles: 100000 };
 
 function load(): Settings {
   try {

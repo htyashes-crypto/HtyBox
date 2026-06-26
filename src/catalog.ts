@@ -140,5 +140,15 @@ export interface FileRef {
   rel: string;
   path: string;
 }
-export const listAllFiles = (root: string, skipFolders: string[], skipExts: string[]) =>
-  invoke<FileRef[]>("list_all_files", { root, skipFolders, skipExts });
+export interface ListFilesResult {
+  files: FileRef[];
+  total: number; // 工作区有效文件真实总数（files 可能因 maxFiles 截断）
+}
+export const listAllFiles = (
+  root: string,
+  skipFolders: string[],
+  skipExts: string[],
+  maxFiles: number,
+) => invoke<ListFilesResult>("list_all_files", { root, skipFolders, skipExts, maxFiles });
+export const countWorkspaceFiles = (root: string, skipFolders: string[], skipExts: string[]) =>
+  invoke<number>("count_workspace_files", { root, skipFolders, skipExts });
