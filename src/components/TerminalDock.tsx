@@ -44,6 +44,7 @@ import DockActionsMenu from "./DockActionsMenu";
 import { registerDockHost } from "../dockBus";
 import { captureSessionIds } from "../catalog";
 import { getSessionTitle, setSessionTitle, onSessionTitlesChange, splitStatusPrefix } from "../sessionTitles";
+import { pingAgentActivity, clearTerm } from "../agentStatus";
 import type { RunConfig } from "../runConfigs";
 
 type TermParams = {
@@ -197,6 +198,70 @@ export function markWorkspaceClosing(workspaceId: string): void {
   CLOSING.add(workspaceId);
 }
 
+// Tab 类型图标（方案 B 实心彩色徽章）：ClaudeCode/Codex 用现有素材（codex 随主题 invert）；
+// 其余 6 类内联彩色徽章。普通终端随主题色（底=var(--text)、字=var(--bg)，暗色下不糊）。
+const TAB_CODE_RE = /\.(ts|tsx|js|jsx|mjs|cjs|py|rs|go|java|c|h|cc|cpp|hpp|cs|rb|php|swift|kt|kts|scala|sh|bash|zsh|ps1|bat|lua|sql|r|dart|vue|svelte|astro|json|json5|jsonc|ya?ml|toml|xml|html?|css|scss|sass|less|styl|graphql|proto)$/i;
+const TAB_IMG_RE = /\.(png|jpe?g|jfif|gif|webp|bmp|ico|avif)$/i;
+
+function TabTypeIcon({ params }: { params: TermParams & { editorPath?: string } }) {
+  const ep = params.editorPath;
+  const cls = "h-[15px] w-[15px] shrink-0";
+  if (!ep) {
+    if (params.agentKind === "claude") return <img src={claudeIcon} alt="" className={cls} draggable={false} />;
+    if (params.agentKind === "codex") return <img src={codexIcon} alt="" className={"codex-glyph " + cls} draggable={false} />;
+    return (
+      <svg className={cls} viewBox="0 0 24 24">
+        <rect x="2" y="3.5" width="20" height="17" rx="5" fill="var(--text)" />
+        <polyline points="6.5 9.5 9.5 12 6.5 14.5" fill="none" stroke="var(--bg)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <line x1="11.5" y1="14.8" x2="16" y2="14.8" stroke="var(--bg)" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (TAB_IMG_RE.test(ep))
+    return (
+      <svg className={cls} viewBox="0 0 24 24">
+        <rect x="2" y="3.5" width="20" height="17" rx="5" fill="#2fa35e" />
+        <circle cx="8" cy="9.5" r="1.6" fill="#fff" />
+        <path d="M4.5 16.5 L9 12 L12 14.5 L15.5 11 L19.5 16" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  if (/\.svg$/i.test(ep))
+    return (
+      <svg className={cls} viewBox="0 0 24 24">
+        <rect x="2" y="3.5" width="20" height="17" rx="5" fill="#d97757" />
+        <path d="M5 15 C 8.5 9.5, 15.5 9.5, 19 15" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+        <rect x="3.4" y="13.6" width="3" height="3" rx="0.5" fill="#fff" />
+        <rect x="17.6" y="13.6" width="3" height="3" rx="0.5" fill="#fff" />
+        <circle cx="12" cy="9.2" r="1.5" fill="#fff" />
+      </svg>
+    );
+  if (/\.(md|markdown)$/i.test(ep))
+    return (
+      <svg className={cls} viewBox="0 0 24 24">
+        <rect x="2" y="3.5" width="20" height="17" rx="5" fill="#4f7cc4" />
+        <path d="M6 15 V9.2 L8.4 12.2 L10.8 9.2 V15" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M14.6 9.2 V13.6 M12.5 11.8 L14.6 14 L16.7 11.8" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  if (TAB_CODE_RE.test(ep))
+    return (
+      <svg className={cls} viewBox="0 0 24 24">
+        <rect x="2" y="3.5" width="20" height="17" rx="5" fill="#8b7cff" />
+        <polyline points="9 8.5 6 12 9 15.5" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points="15 8.5 18 12 15 15.5" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <line x1="13.2" y1="7.6" x2="10.8" y2="16.4" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  return (
+    <svg className={cls} viewBox="0 0 24 24">
+      <rect x="2" y="3.5" width="20" height="17" rx="5" fill="#8c8a82" />
+      <line x1="7" y1="9" x2="17" y2="9" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+      <line x1="7" y1="12" x2="17" y2="12" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+      <line x1="7" y1="15" x2="13" y2="15" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** 自定义 Tab：自动命名标题 + 双击内联重命名（重命名后不被自动命名覆盖）+ 关闭。 */
 function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
   const [title, setTitle] = useState(props.api.title ?? "");
@@ -267,6 +332,7 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
       title="双击重命名"
       className="flex h-full items-center gap-2 px-2 text-xs"
     >
+      <TabTypeIcon params={props.params as TermParams & { editorPath?: string }} />
       <span className="max-w-[180px] truncate">{title}</span>
       <span
         onClick={(e) => {
@@ -320,8 +386,11 @@ function DockTerminal(props: IDockviewPanelProps<TermParams>) {
     setEngineTitleHandler(termId, (t) => {
       const raw = t.trim();
       if (!raw) return;
+      const changed = LAST_OSC[termId] !== raw;
       LAST_OSC[termId] = raw;
       applyTabTitle(termId, agentKind, props.api);
+      // OSC 标题"活动检测"：内容真变 + 是 agent 终端 → 标记该工作区运行中（agentStatus 三态总线）
+      if (changed && (agentKind === "claude" || agentKind === "codex")) pingAgentActivity(termId);
     });
     // 会话自定义名改变(本终端在 Tab 改、或在 Session 列表改同一会话)→ 实时刷新本 Tab
     const titleSub = onSessionTitlesChange(() => applyTabTitle(termId, agentKind, props.api));
@@ -527,6 +596,7 @@ export default function TerminalDock({
           return;
         }
         markTerminalClosed(termId); // M7-H：主动关闭 → 其 PTY 退出事件不当崩溃
+        clearTerm(termId); // 清运行状态总线（agentStatus 三态）
         // 工作区关闭中：引擎已由 disposeByPrefix 统一结束，且要保留布局/自定义名供复原 → 跳过
         if (CLOSING.has(workspaceId)) return;
         disposeEngine(termId);

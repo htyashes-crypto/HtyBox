@@ -1,8 +1,9 @@
-import { useState, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import SkillPanel from "./SkillPanel";
 import MemoryPanel from "./MemoryPanel";
 import FilePanel from "./FilePanel";
 import SessionPanel from "./SessionPanel";
+import { getWsState, setWsState } from "../wsState";
 
 type Tab = "skill" | "memory" | "file" | "session";
 
@@ -77,6 +78,14 @@ const TABS: { id: Tab; label: string; icon: () => ReactElement }[] = [
   { id: "session", label: "Session", icon: SessionIcon },
 ];
 
+// tab 选择按工作区独立持久化（每个工作区各记各的，跨重启保留）
+const TAB_KEY = "htybox.sidebarTab.v1";
+const VALID_TABS: Tab[] = ["file", "skill", "memory", "session"];
+const readTab = (slug: string): Tab => {
+  const t = getWsState<Tab>(TAB_KEY, slug, "skill");
+  return VALID_TABS.includes(t) ? t : "skill";
+};
+
 export default function Sidebar({
   workspacePath,
   workspaceSlug,
@@ -84,7 +93,13 @@ export default function Sidebar({
   workspacePath: string;
   workspaceSlug: string;
 }) {
-  const [tab, setTab] = useState<Tab>("skill");
+  const [tab, setTabState] = useState<Tab>(() => readTab(workspaceSlug));
+  // 切工作区 → 读该工作区各自的 tab（组件不 remount，state 不随 props 自动重置，需显式重载）
+  useEffect(() => setTabState(readTab(workspaceSlug)), [workspaceSlug]);
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    setWsState(TAB_KEY, workspaceSlug, t);
+  };
   return (
     <div className="flex h-full flex-col bg-[var(--surface)]">
       {/* 分段切换条（FanBox 风格） */}

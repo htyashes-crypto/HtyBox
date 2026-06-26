@@ -18,6 +18,7 @@ import FileIgnoreModal from "./FileIgnoreModal";
 import PromptModal from "./ui/PromptModal";
 import ConfirmModal from "./ui/ConfirmModal";
 import { loadIgnore, saveIgnore, extOf, type IgnoreCfg } from "../fileIgnore";
+import { getWsState, setWsState } from "../wsState";
 
 const DRAG_MIME = "application/x-htybox-item";
 const MAX_IMPORT = 20 * 1024 * 1024; // 单文件导入上限 20MB
@@ -60,6 +61,9 @@ function saveFavFolders(root: string, paths: string[]): void {
 }
 const baseName = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() || p;
 
+// 文件树展开状态按工作区(root)持久化：完整复原上次展开的目录层级（用户要"像没关过"）
+const EXP_KEY = "htybox.fileExpanded.v1";
+
 function Chevron({ open }: { open: boolean }) {
   return (
     <svg className={"h-3 w-3 shrink-0 text-[var(--text-faint)] transition-transform " + (open ? "rotate-90" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
@@ -80,7 +84,7 @@ type Confirm = { title: string; message: string; run: () => Promise<void> };
 /** 「File」页签：工作区文件树（懒加载）+ 右键菜单 + 拖入(OS复制/树内移动) + 点击开编辑器。 */
 export default function FilePanel({ root, workspaceId }: { root: string; workspaceId: string }) {
   const [children, setChildren] = useState<Record<string, DirEntry[]>>({});
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(getWsState<string[]>(EXP_KEY, root, [])));
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -131,10 +135,14 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
   }, []);
 
   useEffect(() => {
-    setChildren({}); setExpanded(new Set()); setErrors({}); setMenu(null);
+    const saved = getWsState<string[]>(EXP_KEY, root, []); // 复原该工作区上次展开的目录
+    setChildren({}); setExpanded(new Set(saved)); setErrors({}); setMenu(null);
     setIgnore(loadIgnore(root)); setActiveFile(null);
     setFavFolders(loadFavFolders(root));
-    if (root) load(root);
+    if (root) {
+      load(root);
+      saved.forEach((p) => p !== root && load(p)); // 拉回各展开目录子项，渲染出层级（完整复原）
+    }
   }, [root, load]);
 
   const toggle = (path: string) =>
@@ -142,9 +150,15 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else { next.add(path); if (!children[path]) load(path); }
+      setWsState(EXP_KEY, root, [...next]); // 持久化展开态（完整复原）
       return next;
     });
-  const expand = (path: string) => setExpanded((s) => new Set(s).add(path));
+  const expand = (path: string) =>
+    setExpanded((s) => {
+      const next = new Set(s).add(path);
+      setWsState(EXP_KEY, root, [...next]);
+      return next;
+    });
 
   const dirOf = (p: string) => { const i = Math.max(p.lastIndexOf("\\"), p.lastIndexOf("/")); return i > 0 ? p.slice(0, i) : root; };
   const relOf = (p: string) => (p.startsWith(root) ? p.slice(root.length).replace(/^[\\/]/, "") : p);
@@ -172,7 +186,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
       if (up === d) break;
       d = up;
     }
-    setExpanded((s) => { const n = new Set(s); dirs.forEach((x) => n.add(x)); return n; });
+    setExpanded((s) => { const n = new Set(s); dirs.forEach((x) => n.add(x)); setWsState(EXP_KEY, root, [...n]); return n; });
     dirs.forEach((x) => { if (!childrenRef.current[x]) load(x); });
     setActiveFile(filePath);
   }, [root, load]);
@@ -201,6 +215,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
     setExpanded((s) => {
       const n = new Set(s);
       dirs.forEach((x) => n.add(x));
+      setWsState(EXP_KEY, root, [...n]);
       return n;
     });
     dirs.forEach((x) => {

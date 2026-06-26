@@ -129,6 +129,14 @@ html.dark {
   background: #4a453f;
 }
 
+/* 侧边栏收起/展开顺滑动画：仅在显隐切换瞬间给 allotment 的 view 加过渡（拖动时不加该 class，避免迟滞）。
+   allotment view 用 position:absolute + JS 设 left/width，过渡这两个属性即平滑收起/展开。 */
+.htybox-sidebar-anim [class*="splitViewView"] {
+  transition:
+    left 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* 拖拽落点高亮（陶土色） */
 .htybox-drop {
   outline: 2px solid var(--accent);

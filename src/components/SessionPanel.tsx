@@ -11,6 +11,7 @@ import { searchMatch } from "../search";
 import SearchBox from "./ui/SearchBox";
 import ContextMenu, { MENU_SEP } from "./ui/ContextMenu";
 import { getSessionTitle, setSessionTitle, onSessionTitlesChange } from "../sessionTitles";
+import { getWsState, setWsState } from "../wsState";
 import claudeIcon from "../assets/claude.svg";
 import codexIcon from "../assets/codex.svg";
 
@@ -39,17 +40,27 @@ function saveSessFavs(root: string, keys: string[]): void {
   }
 }
 
+// Session 的 claude/codex 选择按工作区持久化（用户点名要持久化的"有状态选择"）
+const AGENT_KEY = "htybox.sessionAgent.v1";
+const readAgent = (root: string): "claude" | "codex" =>
+  getWsState<"claude" | "codex">(AGENT_KEY, root, "claude") === "codex" ? "codex" : "claude";
+
 // 会话自定义名（用户手动重命名覆盖显示）统一收口到 ../sessionTitles，与终端 Tab【共享同一份】：
 // 在 Session 列表重命名 ↔ 在终端 Tab 重命名 改的是同一会话名，两处显示一致（见 sessionTitles.ts）。
 
 /** 「Session」页签：claude/codex 会话列表，点击复原到终端、✕ 删除（移入回收站）。 */
 export default function SessionPanel({ root, workspaceId }: { root: string; workspaceId: string }) {
-  const [agentKind, setAgentKind] = useState<"claude" | "codex">("claude");
+  const [agentKind, setAgentKindState] = useState<"claude" | "codex">(() => readAgent(root));
+  const setAgentKind = (a: "claude" | "codex") => {
+    setAgentKindState(a);
+    setWsState(AGENT_KEY, root, a);
+  };
   const [list, setList] = useState<SessionRef[] | null>(null);
   const [q, setQ] = useState("");
   const [agentOpen, setAgentOpen] = useState(false);
   const [favs, setFavs] = useState<string[]>(() => loadSessFavs(root));
   useEffect(() => setFavs(loadSessFavs(root)), [root]); // 切工作区重载收藏
+  useEffect(() => setAgentKindState(readAgent(root)), [root]); // 切工作区重载 agent 选择（持久化）
   const [menu, setMenu] = useState<{ x: number; y: number; s: SessionRef } | null>(null);
   const [, setTitleVer] = useState(0); // 会话自定义名变化(本面板或终端 Tab 改同一会话)→ 自增触发重渲染
   useEffect(() => onSessionTitlesChange(() => setTitleVer((v) => v + 1)), []);

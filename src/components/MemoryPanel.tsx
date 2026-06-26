@@ -4,6 +4,7 @@ import SearchBox from "./ui/SearchBox";
 import InfoCard from "./ui/InfoCard";
 import { useSettings } from "../settings";
 import { searchMatch } from "../search";
+import { getWsState, setWsState } from "../wsState";
 import { listen } from "@tauri-apps/api/event";
 
 const typeColor: Record<string, string> = {
@@ -14,6 +15,8 @@ const typeColor: Record<string, string> = {
 };
 
 // 分组文件夹名美化：index_0_set_core → core；index_5_mod → mod
+// Memory 树展开按工作区(slug)持久化（完整复原）
+const MEXP_KEY = "htybox.memoryExpanded.v1";
 const prettyGroup = (n: string) => n.replace(/^index_\d+_(set_)?/, "") || n;
 const countTopics = (node: MemoryNode): number =>
   node.isDir ? node.children.reduce((s, c) => s + countTopics(c), 0) : 1;
@@ -31,7 +34,7 @@ function FolderGlyph() {
 export default function MemoryPanel({ slug }: { slug: string }) {
   const [tree, setTree] = useState<MemoryNode[]>([]);
   const [q, setQ] = useState("");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(getWsState<string[]>(MEXP_KEY, slug, [])));
   const { hoverPreview } = useSettings();
 
   useEffect(() => {
@@ -42,6 +45,7 @@ export default function MemoryPanel({ slug }: { slug: string }) {
       else setTree([]);
     };
     reload();
+    setExpanded(new Set(getWsState<string[]>(MEXP_KEY, slug, []))); // 切工作区复原展开层级
     listen("memory-changed", reload).then((u) => {
       if (disposed) u();
       else un = u;
@@ -57,6 +61,7 @@ export default function MemoryPanel({ slug }: { slug: string }) {
       const n = new Set(prev);
       if (n.has(path)) n.delete(path);
       else n.add(path);
+      setWsState(MEXP_KEY, slug, [...n]); // 持久化展开态（完整复原）
       return n;
     });
 
