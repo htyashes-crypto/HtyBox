@@ -2,7 +2,7 @@
 #
 # 三段式(根治 tauri-action 在 matrix 并发下重复创建 draft 的竞态):
 #   1) create-release : 先建【唯一】draft release(正文取 RELEASE_NOTES.md)
-#   2) build-tauri     : 各平台并行构建,用 releaseId 上传产物到同一个 release
+#   2) build-tauri     : 构建 Windows 安装包(仅 windows-latest;mac/Linux 已移除,见 .claude/bugs/ci-release-mac-linux-fail.md),用 releaseId 上传到同一 release
 #   3) publish-release : 全部完成后 publish + make_latest(自更新闭环)
 #
 # 一次性前置(GitHub 仓库 → Settings → Secrets and variables → Actions):
@@ -61,12 +61,6 @@ jobs:
         include:
           - platform: 'windows-latest'
             args: ''
-          - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest'
-            args: '--target x86_64-apple-darwin'
-          - platform: 'ubuntu-22.04'
-            args: ''
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -81,13 +75,6 @@ jobs:
           cache: pnpm
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - name: Install frontend dependencies
         run: pnpm install
       - name: Build and upload to the release
