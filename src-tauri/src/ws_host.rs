@@ -39,9 +39,6 @@ static NEXT_TERM: AtomicU64 = AtomicU64::new(1);
 fn new_term_id() -> String {
     format!("wsterm-{}", NEXT_TERM.fetch_add(1, Ordering::Relaxed))
 }
-fn server_id() -> String {
-    format!("htybox-{}", std::process::id())
-}
 fn host_name() -> String {
     std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
@@ -125,6 +122,7 @@ fn try_make_box(identity: &HostIdentity, text: &str) -> Option<SalsaBox> {
 /// 单连接状态（read loop 单线程持有；forwarder 任务只持 out 克隆，不碰这些 map）。
 struct Conn {
     core: Arc<TerminalCore>,
+    server_id: String, // 与配对 offer 一致（identity.server_id()），供 server_info（spec §3.2）
     out: mpsc::UnboundedSender<Outbound>,
     cipher: Option<Arc<SalsaBox>>, // Some = E2E 加密通道（read loop 解，writer 封）
     next_slot: u8,
@@ -182,6 +180,7 @@ async fn handle_conn(socket: WebSocket, core: Arc<TerminalCore>, identity: Arc<H
 
     let mut conn = Conn {
         core,
+        server_id: identity.server_id().to_string(),
         out: out_tx,
         cipher,
         next_slot: 0,
@@ -251,7 +250,7 @@ impl Conn {
 
         if t == Hello::TYPE {
             self.send_json(&ServerInfo::new(
-                server_id(),
+                self.server_id.clone(),
                 host_name(),
                 env!("CARGO_PKG_VERSION"),
                 Features { terminal_restore: true, pairing: false, relay: false },
