@@ -1,9 +1,10 @@
 // 运行状态总线：聚合 per-terminal "agent 是否在跑" → per-workspace 三态，驱动顶栏标签状态图标。
 // 实时、不持久化（重启后进程都没了）。
 //
-// 判定 = OSC 标题"活动检测"（决策 5 增强）：agent 思考时其 TUI 的 spinner 会持续刷新终端标题
-// → 标题在跳动=运行中；标题静默超过 IDLE_MS=完成/空闲。比死记 spinner 字符更鲁棒、对
-// claude/codex 通用、不依赖 CLI 版本。
+// 活动信号（pingAgentActivity）以 agent 终端的【PTY 字节流活动】(terminalEngine 的 onOutput 上报、节流)
+// 为主 + OSC 标题跳动 (TerminalDock 的 onTitle) 为辅：有字节/标题在动=运行中；二者均静默超 IDLE_MS=完成/空闲。
+// 为何用 PTY 活动而非只盯标题：TUI 的 spinner 是正文行高频重绘(走 PTY)，OSC 标题仅低频更新，只盯标题会在
+// "spinner 在转但标题静默"时把运行中误判为完成。仍不依赖具体 spinner 字符 → 对 claude/codex 通用、不挑 CLI 版本。
 //
 // 三态（优先级 running > doneUnseen > idle）：
 //   running     —— 该工作区有 agent 终端正在跑
@@ -25,7 +26,7 @@ export function onAgentStatusChange(fn: Listener): () => void {
   };
 }
 
-const IDLE_MS = 1500; // 标题静默超过此时长 → 判定完成/空闲
+const IDLE_MS = 2000; // PTY/标题静默超过此时长 → 判定完成/空闲（略放宽，容忍 spinner 慢帧/输出间隔）
 
 const running = new Map<string, boolean>(); // termId → 是否运行中
 const idleTimers = new Map<string, number>(); // termId → idle 定时器句柄
@@ -42,7 +43,7 @@ const wsRunning = (ws: string): boolean => {
   return false;
 };
 
-/** agent 终端标题"跳动"一次（onTitle 内容真变时调）→ 标记运行 + 重置 idle 定时器。 */
+/** agent 终端有活动（PTY 输出 / OSC 标题跳动）时调 → 标记运行 + 重置 idle 定时器。 */
 export function pingAgentActivity(termId: string): void {
   const ws = wsOf(termId);
   const wasRunning = wsRunning(ws);

@@ -2,6 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { invoke, Channel } from "@tauri-apps/api/core";
+import { pingAgentActivity } from "../agentStatus";
 import "@xterm/xterm/css/xterm.css";
 
 /**
@@ -34,6 +35,8 @@ interface Engine {
   lastRows?: number;
   fitTimer?: number; // 防抖句柄：合并连续尺寸变化（挂载布局抖动 / 拖动分屏），稳定后只 fit 一次
   lastOutputAt?: number; // 最近一次收到 PTY 输出的时间戳（M7-D：静默=回合物理结束、可安全注入）
+  agentKind?: string; // "claude"|"codex"|"shell"：决定是否把 PTY 活动上报运行状态总线
+  lastPingAt?: number; // 最近一次向 agentStatus 上报活动的时刻（节流 PTY 高频输出，避免每帧都 ping）
 }
 
 const engines = new Map<string, Engine>();
@@ -151,6 +154,7 @@ export function ensureEngine(
     shell,
     cwd,
     env,
+    agentKind,
     pendingLaunch: launchCmd,
     created: false,
     launchArmed: false,
@@ -170,7 +174,18 @@ function createPty(termId: string): void {
 
   const onOutput = new Channel<number[]>();
   onOutput.onmessage = (bytes) => {
-    e.lastOutputAt = Date.now(); // 记录输出时刻 → 供 M7-D 静默检测(物理确认)
+    const now = Date.now();
+    e.lastOutputAt = now; // 记录输出时刻 → 供 M7-D 静默检测(物理确认)
+    // 运行状态总线（agentStatus 三态）：agent 终端的 PTY 字节流活动 = 正在跑。比 OSC 标题跳动更可靠
+    // —— TUI 的 spinner 是【正文行高频重绘】(走 PTY)，而 OSC 标题(OSC 2)仅在状态/会话名切换时低频更新；
+    // 只盯标题会在"spinner 在转但标题静默"时把运行中误判为完成。节流 250ms，避免每帧 ping。
+    if (
+      (e.agentKind === "claude" || e.agentKind === "codex") &&
+      now - (e.lastPingAt ?? 0) >= 250
+    ) {
+      e.lastPingAt = now;
+      pingAgentActivity(termId);
+    }
     e.term.write(new Uint8Array(bytes));
   };
 
