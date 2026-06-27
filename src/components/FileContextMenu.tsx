@@ -17,6 +17,7 @@ export default function FileContextMenu({
   hasClipboard,
   isTopLevel,
   favorited,
+  count,
   onAction,
   onClose,
 }: {
@@ -26,6 +27,7 @@ export default function FileContextMenu({
   hasClipboard: boolean;
   isTopLevel: boolean;
   favorited: boolean;
+  count: number;
   onAction: (id: string) => void;
   onClose: () => void;
 }) {
@@ -86,7 +88,17 @@ export default function FileContextMenu({
         SEP,
       ]
     : [{ id: "openEditor", label: "在编辑器打开" }, SEP];
-  const items = [...head, ...common];
+  // 多选(>1)：只保留对多项有意义的批量项（决策 6）；单选与现状逐项一致
+  const multi: (Item | typeof SEP)[] = [
+    { id: "cut", label: `剪切 ${count} 项` },
+    { id: "copy", label: `复制 ${count} 项` },
+    SEP,
+    { id: "copyPath", label: "复制路径" },
+    { id: "copyRelPath", label: "复制相对路径" },
+    SEP,
+    { id: "delete", label: `删除 ${count} 项`, danger: true },
+  ];
+  const items = count > 1 ? multi : [...head, ...common];
 
   return createPortal(
     <div

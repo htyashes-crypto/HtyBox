@@ -2,6 +2,9 @@ import { useSyncExternalStore } from "react";
 import type { FontKey } from "./fontKeys";
 import type { ThemeKey } from "./themeKeys";
 
+/** 文件树/全局搜索的单击行为模式。 */
+export type FileClickMode = "open" | "select";
+
 /** 全局设置（未来各种开关都加到这里）。持久化在 localStorage。 */
 export interface Settings {
   /** Skill/Memory 卡片鼠标悬停时弹出详情浮层 */
@@ -14,10 +17,12 @@ export interface Settings {
   maxFiles: number;
   /** 界面主题：light=浅色奶油 / dark=暖调棕黑 / system=跟随系统。默认 light */
   theme: ThemeKey;
+  /** 文件单击行为：open=单击即打开/展开(现状,默认) / select=单击仅选中、双击才打开/展开(Windows 式)。文件树与全局搜索同步遵循 */
+  fileClickMode: FileClickMode;
 }
 
 const KEY = "htybox.settings.v1";
-const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false, fontFamily: "harmony", maxFiles: 100000, theme: "light" };
+const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false, fontFamily: "harmony", maxFiles: 100000, theme: "light", fileClickMode: "open" };
 
 function load(): Settings {
   try {

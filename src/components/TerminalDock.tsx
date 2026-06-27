@@ -335,6 +335,11 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
       <TabTypeIcon params={props.params as TermParams & { editorPath?: string }} />
       <span className="max-w-[180px] truncate">{title}</span>
       <span
+        // 点非激活 Tab 的 ✕：dockview 会在 pointerdown 阶段先 openPanel(切过去显示该 Tab)再 close → 视觉闪一下。
+        // 捕获阶段 preventDefault 命中 dockview 的 defaultPrevented 逃生通道(tabs.js onPointerDown/onTabClick
+        // 开头都 `if (event.defaultPrevented) return`)；用 capture 是因 dockview 在 .dv-tab 上原生【冒泡】监听
+        // pointerdown，而 React 委托在 app root，捕获阶段必早于该冒泡监听执行 → 赶在它读 defaultPrevented 前置位。
+        onPointerDownCapture={(e) => e.preventDefault()}
         onClick={(e) => {
           e.stopPropagation();
           props.api.close();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   listDir,
   createEntry,
@@ -19,6 +19,7 @@ import PromptModal from "./ui/PromptModal";
 import ConfirmModal from "./ui/ConfirmModal";
 import { loadIgnore, saveIgnore, extOf, type IgnoreCfg } from "../fileIgnore";
 import { getWsState, setWsState } from "../wsState";
+import { useSettings } from "../settings";
 
 const DRAG_MIME = "application/x-htybox-item";
 const MAX_IMPORT = 20 * 1024 * 1024; // 单文件导入上限 20MB
@@ -76,8 +77,8 @@ function FileGlyph() {
   return <svg className="h-3.5 w-3.5 shrink-0 text-[var(--text-faint)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>;
 }
 
-type Clip = { path: string; mode: "cut" | "copy" };
-type Menu = { x: number; y: number; node: DirEntry; isTopLevel: boolean };
+type Clip = { paths: string[]; mode: "cut" | "copy" };
+type Menu = { x: number; y: number; node: DirEntry; isTopLevel: boolean; count: number };
 type Prompt = { title: string; initial: string; confirmText: string; run: (v: string) => Promise<void> };
 type Confirm = { title: string; message: string; run: () => Promise<void> };
 
@@ -99,7 +100,12 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
   const [favFolders, setFavFolders] = useState<string[]>(() => loadFavFolders(root));
   const [ignore, setIgnore] = useState<IgnoreCfg>(() => loadIgnore(root));
   const [activeFile, setActiveFile] = useState<string | null>(null);
+  // 多选（Windows 式）：selected=选中集(高亮+批量操作目标)，anchor=Shift 区间锚点。瞬时态，不持久化。
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const s = useSettings();
   const [showIgnore, setShowIgnore] = useState(false);
+  const [showTop, setShowTop] = useState(false); // 滚动超过阈值 → 浮现「回到顶部」按钮（瞬时态，不持久化）
   const childrenRef = useRef(children);
   childrenRef.current = children;
   const scrollDoneFor = useRef<string | null>(null);
@@ -137,7 +143,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
   useEffect(() => {
     const saved = getWsState<string[]>(EXP_KEY, root, []); // 复原该工作区上次展开的目录
     setChildren({}); setExpanded(new Set(saved)); setErrors({}); setMenu(null);
-    setIgnore(loadIgnore(root)); setActiveFile(null);
+    setIgnore(loadIgnore(root)); setActiveFile(null); setSelected(new Set()); setAnchor(null); setShowTop(false);
     setFavFolders(loadFavFolders(root));
     if (root) {
       load(root);
@@ -171,6 +177,18 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
     list.filter((e) =>
       e.isDir ? !(depth === 0 && ignore.folders.includes(e.name)) : !ignore.exts.includes(extOf(e.name)),
     );
+  // 当前可见项的扁平有序路径（与 renderNode 同序：深度优先 + 仅已展开 + 忽略过滤），供 Shift 区间选 / Ctrl+A 全选
+  const visibleOrder = useMemo(() => {
+    const order: string[] = [];
+    const walk = (list: DirEntry[], depth: number) => {
+      for (const e of filterEntries(list, depth)) {
+        order.push(e.path);
+        if (e.isDir && expanded.has(e.path)) walk(children[e.path] ?? [], depth + 1);
+      }
+    };
+    walk(children[root] ?? [], 0);
+    return order;
+  }, [children, expanded, ignore, root]);
   const applyIgnore = (cfg: IgnoreCfg) => { setIgnore(cfg); saveIgnore(root, cfg); };
   const ignoreFolder = (name: string) => { if (!ignore.folders.includes(name)) applyIgnore({ ...ignore, folders: [...ignore.folders, name] }); };
   const ignoreExt = (e: string) => { if (e && !ignore.exts.includes(e)) applyIgnore({ ...ignore, exts: [...ignore.exts, e] }); };
@@ -188,7 +206,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
     }
     setExpanded((s) => { const n = new Set(s); dirs.forEach((x) => n.add(x)); setWsState(EXP_KEY, root, [...n]); return n; });
     dirs.forEach((x) => { if (!childrenRef.current[x]) load(x); });
-    setActiveFile(filePath);
+    setActiveFile(filePath); setSelected(new Set([filePath])); setAnchor(filePath);
   }, [root, load]);
   useEffect(() => registerActiveFileReveal(workspaceId, reveal), [workspaceId, reveal]);
 
@@ -222,7 +240,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
       if (!childrenRef.current[x]) load(x);
     });
     scrollDoneFor.current = null;
-    setActiveFile(p);
+    setActiveFile(p); setSelected(new Set([p])); setAnchor(p);
   };
 
   // OS 文件导入回退路径：WebView 不支持 entry 接口时按 FileList（仅文件，无法递归文件夹）
@@ -307,19 +325,51 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
     const raw = e.dataTransfer.getData(DRAG_MIME);
     if (!raw) return;
     try {
-      const item = JSON.parse(raw) as { kind: string; path: string };
+      const item = JSON.parse(raw) as { kind: string; path?: string; paths?: string[] };
       if (item.kind !== "file") return;
-      if (item.path === dir || dir.startsWith(item.path) || dirOf(item.path) === dir) return;
-      await moveEntry(item.path, dir);
-      expand(dir); reloadDir(dir); reloadDir(dirOf(item.path));
+      const srcs = item.paths?.length ? item.paths : item.path ? [item.path] : [];
+      const srcDirs = new Set<string>();
+      const fails: string[] = [];
+      for (const src of srcs) {
+        if (src === dir || dir.startsWith(src) || dirOf(src) === dir) continue; // 跳过移入自身/子目录/原地
+        try { await moveEntry(src, dir); srcDirs.add(dirOf(src)); }
+        catch (err) { fails.push(`${baseName(src)}：${String(err)}`); }
+      }
+      expand(dir); reloadDir(dir); srcDirs.forEach(reloadDir);
+      setSelected(new Set());
+      if (fails.length) setOpErr(`部分移动失败：${fails.join("；")}`);
     } catch (err) { setOpErr(String(err)); }
   };
 
   const runPrompt = (title: string, initial: string, confirmText: string, run: (v: string) => Promise<void>) =>
     setPrompt({ title, initial, confirmText, run });
 
+  // 批量删除确认（右键删除 / Delete 键共用）：逐项进回收站，失败不中断、汇总到 opErr
+  const askDeletePaths = (paths: string[]) => {
+    if (!paths.length) return;
+    const names = paths.slice(0, 5).map(baseName).join("、") + (paths.length > 5 ? ` 等 ${paths.length} 项` : "");
+    setConfirm({
+      title: paths.length > 1 ? `删除选中的 ${paths.length} 项？` : `删除 “${baseName(paths[0])}”？`,
+      message: `${names}\n将移动到系统回收站，可从那里恢复。`,
+      run: async () => {
+        const dirs = new Set<string>();
+        const fails: string[] = [];
+        for (const p of paths) {
+          try { await deleteEntry(p); dirs.add(dirOf(p)); }
+          catch (e) { fails.push(`${baseName(p)}：${String(e)}`); }
+        }
+        dirs.forEach(reloadDir);
+        setSelected(new Set());
+        setAnchor(null);
+        if (fails.length) setOpErr(`部分删除失败：${fails.join("；")}`);
+      },
+    });
+  };
+
   const doAction = async (id: string, node: DirEntry) => {
     const dir = dirFor(node);
+    // 批量目标：右键已保证 selected 含命中项（命中未选时已重置为该项）；兜底单项
+    const targets = selected.size ? [...selected] : [node.path];
     try {
       switch (id) {
         case "openEditor": openEditor(workspaceId, node.path); break;
@@ -333,26 +383,26 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
         case "rename":
           runPrompt("重命名", node.name, "重命名", async (v) => { await renameEntry(node.path, v); reloadDir(dirOf(node.path)); });
           break;
-        case "delete":
-          setConfirm({
-            title: `删除 “${node.name}”？`,
-            message: "将移动到系统回收站，可从那里恢复。",
-            run: async () => { await deleteEntry(node.path); reloadDir(dirOf(node.path)); },
-          });
-          break;
-        case "cut": setClip({ path: node.path, mode: "cut" }); break;
-        case "copy": setClip({ path: node.path, mode: "copy" }); break;
+        case "delete": askDeletePaths(targets); break;
+        case "cut": setClip({ paths: targets, mode: "cut" }); break;
+        case "copy": setClip({ paths: targets, mode: "copy" }); break;
         case "paste":
           if (clip) {
-            if (clip.mode === "cut") await moveEntry(clip.path, dir);
-            else await copyEntry(clip.path, dir);
+            const fails: string[] = [];
+            for (const p of clip.paths) {
+              try {
+                if (clip.mode === "cut") await moveEntry(p, dir);
+                else await copyEntry(p, dir);
+              } catch (err) { fails.push(`${baseName(p)}：${String(err)}`); }
+            }
             expand(dir); reloadDir(dir);
-            if (clip.mode === "cut") reloadDir(dirOf(clip.path));
+            if (clip.mode === "cut") new Set(clip.paths.map(dirOf)).forEach(reloadDir);
             setClip(null);
+            if (fails.length) setOpErr(`部分粘贴失败：${fails.join("；")}`);
           }
           break;
-        case "copyPath": await navigator.clipboard.writeText(node.path); break;
-        case "copyRelPath": await navigator.clipboard.writeText(relOf(node.path)); break;
+        case "copyPath": await navigator.clipboard.writeText(targets.join("\n")); break;
+        case "copyRelPath": await navigator.clipboard.writeText(targets.map(relOf).join("\n")); break;
         case "reveal": await revealInExplorer(node.path); break;
         case "toggleFav": toggleFavFolder(node.path); break;
         case "ignoreFolder": ignoreFolder(node.name); break;
@@ -363,11 +413,51 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
     }
   };
 
+  // 行点击：Ctrl 离散切换 / Shift 区间 / 无修饰键按 fileClickMode 决定「选中并打开/展开」或「仅选中」
+  const clickRow = (entry: DirEntry, e: React.MouseEvent) => {
+    const path = entry.path;
+    if (e.ctrlKey || e.metaKey) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(path)) next.delete(path);
+        else next.add(path);
+        return next;
+      });
+      setAnchor(path);
+      return;
+    }
+    if (e.shiftKey) {
+      const i = anchor ? visibleOrder.indexOf(anchor) : -1;
+      const j = visibleOrder.indexOf(path);
+      if (i >= 0 && j >= 0) {
+        const [lo, hi] = i <= j ? [i, j] : [j, i];
+        setSelected(new Set(visibleOrder.slice(lo, hi + 1)));
+      } else {
+        setSelected(new Set([path]));
+        setAnchor(path);
+      }
+      return;
+    }
+    setSelected(new Set([path]));
+    setAnchor(path);
+    if (s.fileClickMode === "open") {
+      if (entry.isDir) toggle(path);
+      else openEditor(workspaceId, path);
+    }
+  };
+  // 双击：仅「单击选中」模式用——打开文件 / 展开目录（open 模式单击已处理，双击不再额外动作）
+  const dblRow = (entry: DirEntry) => {
+    if (s.fileClickMode !== "select") return;
+    if (entry.isDir) toggle(entry.path);
+    else openEditor(workspaceId, entry.path);
+  };
+
   const renderNode = (entry: DirEntry, depth: number) => {
     const isOpen = expanded.has(entry.path);
     const pad = 8 + depth * 12;
     const isDrop = dropDir === entry.path;
     const isActive = entry.path === activeFile;
+    const isSel = selected.has(entry.path);
     return (
       <div key={entry.path}>
         <div
@@ -383,7 +473,14 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           }
           draggable
           onDragStart={(e) => {
-            e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ kind: "file", path: entry.path }));
+            // 拖动已选中项之一→整组；拖动未选中项→重置选区为该项(Windows 行为)
+            const multi = selected.has(entry.path) && selected.size > 1;
+            const paths = multi ? [...selected] : [entry.path];
+            if (!multi && !selected.has(entry.path)) {
+              setSelected(new Set([entry.path]));
+              setAnchor(entry.path);
+            }
+            e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ kind: "file", path: entry.path, paths }));
             e.dataTransfer.effectAllowed = "copyMove";
             // 延后到下一帧再改 DOM：dragstart 期间同步增删 DOM 会被 WebView 取消本次拖拽
             requestAnimationFrame(() => setDragActive(true));
@@ -403,11 +500,19 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           }
           onDragLeave={entry.isDir ? () => setDropDir((d) => (d === entry.path ? null : d)) : undefined}
           onDrop={entry.isDir ? (e) => onFolderDrop(entry.path, e) : undefined}
-          onClick={() => (entry.isDir ? toggle(entry.path) : openEditor(workspaceId, entry.path))}
+          onClick={(e) => clickRow(entry, e)}
+          onDoubleClick={() => dblRow(entry)}
           onContextMenu={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            setMenu({ x: e.clientX, y: e.clientY, node: entry, isTopLevel: depth === 0 });
+            // 决策 5：命中未选中项→选区重置为该项；命中已选中项→保持选区、对整组生效
+            let count = selected.size;
+            if (!selected.has(entry.path)) {
+              setSelected(new Set([entry.path]));
+              setAnchor(entry.path);
+              count = 1;
+            }
+            setMenu({ x: e.clientX, y: e.clientY, node: entry, isTopLevel: depth === 0, count });
           }}
           title={entry.path}
           style={{ paddingLeft: pad }}
@@ -415,12 +520,18 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
             "flex cursor-pointer items-center gap-1.5 rounded py-1 pr-2 text-[12px] text-[var(--text-deep)] " +
             (isDrop
               ? "bg-[var(--accent)]/15 ring-1 ring-inset ring-[var(--accent-border)]"
-              : isActive
+              : isSel
                 ? "bg-[var(--accent)]/12"
                 : "hover:bg-[var(--surface-hover)]")
           }
         >
-          {entry.isDir ? <Chevron open={isOpen} /> : <span className="w-3 shrink-0" />}
+          {entry.isDir ? (
+            <span onClick={(e) => { e.stopPropagation(); toggle(entry.path); }} className="-m-1 shrink-0 p-1" title="展开/折叠">
+              <Chevron open={isOpen} />
+            </span>
+          ) : (
+            <span className="w-3 shrink-0" />
+          )}
           {entry.isDir ? <FolderGlyph /> : <FileGlyph />}
           <span className="min-w-0 flex-1 truncate">{entry.name}</span>
         </div>
@@ -526,7 +637,28 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
             <span className="hty-hint-arrow hty-hint-arrow-down">▼</span>悬停此处下滚
           </span>
         </div>
-        <div ref={scrollRef} className="h-full overflow-y-auto px-1 pb-3">
+        <div
+          ref={scrollRef}
+          tabIndex={0}
+          onScroll={(e) => setShowTop(e.currentTarget.scrollTop > 200)}
+          onClick={(e) => { if (e.target === e.currentTarget) { setSelected(new Set()); setAnchor(null); } }}
+          onKeyDown={(e) => {
+            // 有弹窗/输入聚焦时不接管，避免吞掉重命名框/确认框的按键
+            if (prompt || confirm || menu || showIgnore) return;
+            const tag = (e.target as HTMLElement).tagName;
+            if (tag === "INPUT" || tag === "TEXTAREA") return;
+            if (e.key === "Delete") {
+              if (selected.size) { e.preventDefault(); askDeletePaths([...selected]); }
+            } else if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+              e.preventDefault();
+              setSelected(new Set(visibleOrder));
+            } else if (e.key === "Escape") {
+              setSelected(new Set());
+              setAnchor(null);
+            }
+          }}
+          className="h-full overflow-y-auto px-1 pb-3 outline-none"
+        >
           {/* 收藏文件夹：独立快速跳转区（原树仍照常显示，不隐藏） */}
           {favFolders.length > 0 && (
             <div className="mb-1.5">
@@ -566,6 +698,29 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
         {!errors[root] && !loading.has(root) && rootEntries.length === 0 && <div className="px-2 pt-6 text-center text-[11px] text-[var(--text-3)]">空目录（可把文件拖到这里）</div>}
         {rootEntries.map((e) => renderNode(e, 0))}
         </div>
+        {/* 回到顶部：滚动超过阈值浮现（常驻 DOM + 过渡；拖拽时隐藏，避让底部自动滚动条带） */}
+        <button
+          type="button"
+          title="回到顶部"
+          aria-label="回到顶部"
+          onClick={() =>
+            scrollRef.current?.scrollTo({
+              top: 0,
+              behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+            })
+          }
+          className={
+            "absolute right-3 bottom-3 z-10 grid h-9 w-9 place-items-center rounded-full border border-[var(--accent-border)] bg-[var(--elevated)] text-[var(--accent-text)] shadow-lg transition-all duration-200 ease-out hover:bg-[var(--accent)] hover:text-white " +
+            (showTop && !dragActive
+              ? "pointer-events-auto translate-y-0 opacity-100"
+              : "pointer-events-none translate-y-1 opacity-0")
+          }
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
+          </svg>
+        </button>
       </div>
       {menu && (
         <FileContextMenu
@@ -575,6 +730,7 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
           hasClipboard={!!clip}
           isTopLevel={menu.isTopLevel}
           favorited={isFavFolder(menu.node.path)}
+          count={menu.count}
           onAction={(id) => doAction(id, menu.node)}
           onClose={() => setMenu(null)}
         />

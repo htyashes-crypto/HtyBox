@@ -86,7 +86,8 @@ export default function QuickOpen({
             <button
               key={f.path}
               onMouseEnter={() => setSel(i)}
-              onClick={() => open(f)}
+              onClick={() => { if (s.fileClickMode === "open") open(f); else setSel(i); }}
+              onDoubleClick={() => open(f)}
               className={
                 "flex w-full items-baseline gap-2 px-4 py-1.5 text-left " +
                 (i === sel ? "bg-[var(--accent)]/12" : "hover:bg-[var(--surface)]")

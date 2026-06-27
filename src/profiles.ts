@@ -83,18 +83,24 @@ export function launchCmdFor(
 }
 
 export interface DragItem {
-  kind: "skill" | "memory" | "file";
+  kind: "skill" | "memory" | "file" | "text";
   invoke?: string; // skill 的 /调用串
-  path: string; // 文件绝对路径
+  text?: string; // text(书签)：直接注入的文本内容
+  path?: string; // 文件绝对路径（text 类型无 path）
+  paths?: string[]; // file 多选拖拽：多个绝对路径（有则优先于 path）
 }
 
 /** 按目标终端的 agent 类型决定注入文本（落点时计算，而非拖起时）。 */
 export function injectText(item: DragItem, agent: AgentKind): string {
+  // text(书签)：直接注入文本内容，三种 agent 一致；多行压成单行防 agent 输入框逐行误提交。
+  if (item.kind === "text") return (item.text ?? "").replace(/\r?\n/g, " ").trim();
   if (item.kind === "skill") {
-    if (agent === "claude") return item.invoke ?? item.path; // /skill-name
-    if (agent === "codex") return "@" + item.path; // codex 用文件路径
-    return item.path; // 裸 shell：纯路径
+    if (agent === "claude") return item.invoke ?? item.path ?? ""; // /skill-name
+    if (agent === "codex") return "@" + (item.path ?? ""); // codex 用文件路径
+    return item.path ?? ""; // 裸 shell：纯路径
   }
-  // memory / file：shell 用裸路径，claude/codex 用 @路径
-  return agent === "shell" ? item.path : "@" + item.path;
+  // memory / file：shell 用裸路径，claude/codex 用 @路径；file 多选时各路径转换后以空格拼接
+  const toRef = (p: string) => (agent === "shell" ? p : "@" + p);
+  if (item.kind === "file" && item.paths?.length) return item.paths.map(toRef).join(" ");
+  return toRef(item.path ?? "");
 }

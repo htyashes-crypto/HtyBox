@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSettings, setSetting } from "../settings";
+import { useSettings, setSetting, type FileClickMode } from "../settings";
 import { FONTS, applyFont } from "../fonts";
 import { THEMES, applyTheme, watchSystemTheme } from "../theme";
 import { loadIgnore } from "../fileIgnore";
@@ -24,6 +24,11 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
     </button>
   );
 }
+
+const CLICK_MODES: { key: FileClickMode; label: string; desc: string }[] = [
+  { key: "open", label: "单击打开（默认）", desc: "单击文件即在编辑器打开、文件夹即展开/折叠" },
+  { key: "select", label: "单击选中 · 双击打开", desc: "单击仅选中(可 Ctrl/Shift 多选)，双击才打开/展开" },
+];
 
 /** 全局设置弹窗（Cursor 式）。未来各类全局开关都加到这里。 */
 export default function SettingsModal({
@@ -117,6 +122,36 @@ export default function SettingsModal({
               on={s.autoRelay}
               onChange={(v) => setSetting("autoRelay", v)}
             />
+          </div>
+
+          <div className="rounded-lg px-3 py-2.5">
+            <div className="text-sm font-medium text-[var(--text)]">文件单击行为</div>
+            <div className="mb-2.5 text-[11px] text-[var(--text-faint)]">
+              文件树与全局搜索通用；选「单击选中」可像资源管理器那样 Ctrl/Shift 多选后批量操作
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {CLICK_MODES.map((m) => {
+                const on = s.fileClickMode === m.key;
+                return (
+                  <button
+                    key={m.key}
+                    onClick={() => setSetting("fileClickMode", m.key)}
+                    className={
+                      "rounded-lg border px-3 py-2 text-left transition-colors " +
+                      (on
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                        : "border-[var(--border)] hover:bg-[var(--surface-soft)]")
+                    }
+                  >
+                    <div className="flex items-center gap-1.5 text-[13px] leading-tight text-[var(--text)]">
+                      {m.label}
+                      {on && <span className="text-[var(--accent)]">✓</span>}
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-[var(--text-faint)]">{m.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="rounded-lg px-3 py-2.5">
