@@ -9,7 +9,7 @@ mod watcher;
 mod ws_host;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use host_identity::HostIdentity;
 use pty::SpawnOptions;
@@ -23,6 +23,19 @@ struct AppState {
     ws_port: u16, // L2：本机 WS Host 端口（前端/配对取用）
     identity: Arc<HostIdentity>, // L3：Host 身份（公钥即配对信任锚）
     lan_enabled: Arc<AtomicBool>, // L3：LAN(0.0.0.0) 开关（绑定在启动时按此决定，改动需重启）
+    workspaces: Arc<Mutex<htybox_link::rpc::WorkspacesResult>>, // L5-4P：桌面前端发布的工作区（供远程镜像）
+}
+
+/// L5-4P：桌面前端把已打开工作区 + 当前激活发布给 Host，供远程客户端镜像。
+#[tauri::command]
+fn set_workspaces(
+    state: State<'_, AppState>,
+    workspaces: Vec<htybox_link::rpc::WorkspaceInfo>,
+    active_id: Option<String>,
+) {
+    if let Ok(mut w) = state.workspaces.lock() {
+        *w = htybox_link::rpc::WorkspacesResult { workspaces, active_id };
+    }
 }
 
 /// L2：前端查询本机 WS Host 端口。
@@ -452,6 +465,8 @@ pub fn run() {
     let identity = Arc::new(HostIdentity::load_or_create());
     let identity_for_setup = identity.clone();
     let lan_enabled_state = Arc::new(AtomicBool::new(lan_on));
+    let workspaces = Arc::new(Mutex::new(htybox_link::rpc::WorkspacesResult::default()));
+    let workspaces_for_ws = workspaces.clone();
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -463,6 +478,7 @@ pub fn run() {
             ws_port: ws_listen_port,
             identity,
             lan_enabled: lan_enabled_state,
+            workspaces,
         })
         .setup(move |app| {
             watcher::start(app.handle().clone());
@@ -470,7 +486,7 @@ pub fn run() {
             terminal_for_setup.set_app(app.handle().clone()); // M7-H：子进程退出 emit "terminal-exit"
             // L2/L3：起本机 WS Host（跑在 Tauri 自带 tokio runtime 上），带 Host 身份做 E2E
             let core = terminal_for_setup.clone();
-            tauri::async_runtime::spawn(async move { ws_host::serve(ws_listener, core, identity_for_setup).await });
+            tauri::async_runtime::spawn(async move { ws_host::serve(ws_listener, core, identity_for_setup, workspaces_for_ws).await });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -482,6 +498,7 @@ pub fn run() {
             pairing_offer,
             lan_enabled,
             set_lan_enabled,
+            set_workspaces,
             list_skills,
             list_project_skills,
             list_memories,

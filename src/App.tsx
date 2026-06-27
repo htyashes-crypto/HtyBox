@@ -9,9 +9,11 @@ import CollabModal from "./components/CollabModal";
 import WakeToasts from "./components/WakeToasts";
 import QuickOpen from "./components/QuickOpen";
 import WindowControls from "./components/WindowControls";
+import BookmarkBar from "./components/BookmarkBar";
 import { disposeByPrefix } from "./components/terminalEngine";
 import { launchAgents, type AgentSpec } from "./mcp";
 import { open } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import UpdateModal from "./components/UpdateModal";
 import HtyBoxLogo from "./components/ui/HtyBoxLogo";
 import { checkForUpdate, getSkippedVersion, setSkippedVersion, type Update } from "./updater";
@@ -192,6 +194,13 @@ export default function App() {
   // 运行状态总线：订阅刷新顶栏标签三态图标 + 把当前激活工作区告知总线（切到即清"完成待查看"）
   useEffect(() => onAgentStatusChange(forceStatusTick), [forceStatusTick]);
   useEffect(() => setActiveWorkspace(activeId), [activeId]);
+  // L5-4P：把已打开工作区 + 当前激活发布给本机 Host，供 iOS 远程镜像（纯加法，桌面行为不变）
+  useEffect(() => {
+    invoke("set_workspaces", {
+      workspaces: openWs.map((w) => ({ id: w.id, name: w.name, path: w.path })),
+      activeId,
+    }).catch(() => {});
+  }, [openWs, activeId]);
 
   // 启动检查更新：有可用更新 → 记下；未被「跳过」则自动弹窗（端点不可达/离线静默忽略）
   useEffect(() => {
@@ -414,6 +423,7 @@ export default function App() {
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2 pr-1">
+            <BookmarkBar scope={active.id} />
             <button
               onClick={() => setShowSettings(true)}
               title="设置"

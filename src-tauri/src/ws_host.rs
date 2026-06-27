@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, State};
@@ -61,10 +61,16 @@ pub fn bind(lan: bool) -> std::net::TcpListener {
 struct WsState {
     core: Arc<TerminalCore>,
     identity: Arc<HostIdentity>,
+    workspaces: Arc<Mutex<WorkspacesResult>>,
 }
 
 /// 在 tokio 上跑 axum WS server（消费 `bind()` 得到的 std listener）。
-pub async fn serve(std_listener: std::net::TcpListener, core: Arc<TerminalCore>, identity: Arc<HostIdentity>) {
+pub async fn serve(
+    std_listener: std::net::TcpListener,
+    core: Arc<TerminalCore>,
+    identity: Arc<HostIdentity>,
+    workspaces: Arc<Mutex<WorkspacesResult>>,
+) {
     if std_listener.set_nonblocking(true).is_err() {
         return;
     }
@@ -72,7 +78,7 @@ pub async fn serve(std_listener: std::net::TcpListener, core: Arc<TerminalCore>,
         Ok(l) => l,
         Err(_) => return,
     };
-    let app = Router::new().route("/ws", any(ws_upgrade)).with_state(WsState { core, identity });
+    let app = Router::new().route("/ws", any(ws_upgrade)).with_state(WsState { core, identity, workspaces });
     let _ = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await;
 }
 
@@ -86,7 +92,7 @@ async fn ws_upgrade(
         return (StatusCode::FORBIDDEN, "host not allowed").into_response();
     }
     let is_remote = !addr.ip().is_loopback();
-    ws.on_upgrade(move |socket| handle_conn(socket, st.core, st.identity, is_remote))
+    ws.on_upgrade(move |socket| handle_conn(socket, st.core, st.identity, st.workspaces, is_remote))
 }
 
 /// 本机连接：Host 头须 localhost（防浏览器 DNS rebinding）。远程(LAN)：放行——E2E + 公钥信任另行强制。
@@ -123,6 +129,7 @@ fn try_make_box(identity: &HostIdentity, text: &str) -> Option<SalsaBox> {
 struct Conn {
     core: Arc<TerminalCore>,
     server_id: String, // 与配对 offer 一致（identity.server_id()），供 server_info（spec §3.2）
+    workspaces: Arc<Mutex<WorkspacesResult>>, // L5-4P：桌面发布的工作区，host.workspaces.list 返回
     out: mpsc::UnboundedSender<Outbound>,
     cipher: Option<Arc<SalsaBox>>, // Some = E2E 加密通道（read loop 解，writer 封）
     next_slot: u8,
@@ -130,7 +137,13 @@ struct Conn {
     forwarders: HashMap<u8, JoinHandle<()>>,
 }
 
-async fn handle_conn(socket: WebSocket, core: Arc<TerminalCore>, identity: Arc<HostIdentity>, is_remote: bool) {
+async fn handle_conn(
+    socket: WebSocket,
+    core: Arc<TerminalCore>,
+    identity: Arc<HostIdentity>,
+    workspaces: Arc<Mutex<WorkspacesResult>>,
+    is_remote: bool,
+) {
     let (mut sink, mut stream) = socket.split();
 
     // ── E2E 协商（看首帧）：e2ee_hello→建盒+回 ready；远程无 E2E→拒；本机明文→首帧作业务 ──
@@ -181,6 +194,7 @@ async fn handle_conn(socket: WebSocket, core: Arc<TerminalCore>, identity: Arc<H
     let mut conn = Conn {
         core,
         server_id: identity.server_id().to_string(),
+        workspaces,
         out: out_tx,
         cipher,
         next_slot: 0,
@@ -311,7 +325,8 @@ impl Conn {
                 self.send_json(&RpcResponse::new(types::TERMINAL_RENAME_RESP, req_id, serde_json::json!({})));
             }
             types::HOST_WORKSPACES_LIST_REQ => {
-                self.send_json(&RpcResponse::new(types::HOST_WORKSPACES_LIST_RESP, req_id, WorkspacesResult { workspaces: vec![] }));
+                let result = self.workspaces.lock().map(|w| w.clone()).unwrap_or_default();
+                self.send_json(&RpcResponse::new(types::HOST_WORKSPACES_LIST_RESP, req_id, result));
             }
             other => {
                 if !req_id.is_empty() {
@@ -423,7 +438,8 @@ mod tests {
         let identity = Arc::new(HostIdentity::load_or_create());
         let listener = bind(false);
         let port = listener.local_addr().unwrap().port();
-        tokio::spawn(serve(listener, core, identity));
+        let workspaces = Arc::new(Mutex::new(WorkspacesResult::default()));
+        tokio::spawn(serve(listener, core, identity, workspaces));
         port
     }
     async fn connect(port: u16) -> Ws {
