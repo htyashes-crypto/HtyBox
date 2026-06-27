@@ -328,6 +328,28 @@ impl Conn {
                 let result = self.workspaces.lock().map(|w| w.clone()).unwrap_or_default();
                 self.send_json(&RpcResponse::new(types::HOST_WORKSPACES_LIST_RESP, req_id, result));
             }
+            // L5-4P-2：只读 catalog（镜像桌面左侧 Content），复用桌面既有扫描逻辑。
+            types::CATALOG_SKILLS_LIST_REQ => {
+                let dir = v.get("projectDir").and_then(Value::as_str).unwrap_or("");
+                let skills = crate::catalog::scan_skills(if dir.is_empty() { None } else { Some(dir) });
+                self.send_json(&RpcResponse::new(types::CATALOG_SKILLS_LIST_RESP, req_id, serde_json::json!({ "skills": skills })));
+            }
+            types::CATALOG_MEMORIES_LIST_REQ => {
+                let slug = v.get("slug").and_then(Value::as_str).unwrap_or("");
+                let memories = crate::catalog::scan_memories(slug);
+                self.send_json(&RpcResponse::new(types::CATALOG_MEMORIES_LIST_RESP, req_id, serde_json::json!({ "memories": memories })));
+            }
+            types::CATALOG_FILES_LIST_REQ => {
+                let dir = v.get("dir").and_then(Value::as_str).unwrap_or("");
+                let entries = crate::fs_tree::list_dir(dir).unwrap_or_default();
+                self.send_json(&RpcResponse::new(types::CATALOG_FILES_LIST_RESP, req_id, serde_json::json!({ "entries": entries })));
+            }
+            types::CATALOG_SESSIONS_LIST_REQ => {
+                let cwd = v.get("cwd").and_then(Value::as_str).unwrap_or("");
+                let claude = crate::sessions::list_claude_sessions(cwd);
+                let codex = crate::sessions::list_codex_sessions(cwd);
+                self.send_json(&RpcResponse::new(types::CATALOG_SESSIONS_LIST_RESP, req_id, serde_json::json!({ "claude": claude, "codex": codex })));
+            }
             other => {
                 if !req_id.is_empty() {
                     self.send_err(&req_id, other, "unsupported rpc", "unsupported");
