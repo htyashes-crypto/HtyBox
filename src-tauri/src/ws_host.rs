@@ -5,11 +5,12 @@
 //! 配对 / E2E / LAN / relay 留后续阶段；本阶段安全边界 = 本机 + Host 头白名单。
 
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::State;
+use axum::extract::{ConnectInfo, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::any;
@@ -21,8 +22,11 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
+use crate::host_identity::HostIdentity;
 use crate::pty::SpawnOptions;
 use crate::terminal_core::TerminalCore;
+use htybox_link::e2e::{public_from_b64, E2eeHello, E2eeReady, SalsaBox};
+use htybox_link::frame::{open_frame, seal_frame, InnerKind};
 use htybox_link::handshake::{Features, Hello, ServerInfo};
 use htybox_link::rpc::{
     self, types, CreateTerminalParams, RenameTerminalParams, Response as RpcResponse, RestoreMode,
@@ -44,18 +48,26 @@ fn host_name() -> String {
         .unwrap_or_else(|_| "HtyBox Host".to_string())
 }
 
-/// 同步绑定本机端口（6767 起，占用 +1 探测），返回 std listener（端口可即时取得）。
-pub fn bind() -> std::net::TcpListener {
+/// 同步绑定端口（6767 起，占用 +1 探测）。`lan=true` 绑 `0.0.0.0`(覆盖本地+局域网)，否则仅 `127.0.0.1`。
+pub fn bind(lan: bool) -> std::net::TcpListener {
+    let host: &str = if lan { "0.0.0.0" } else { "127.0.0.1" };
     for port in 6767..6867u16 {
-        if let Ok(l) = std::net::TcpListener::bind(("127.0.0.1", port)) {
+        if let Ok(l) = std::net::TcpListener::bind((host, port)) {
             return l;
         }
     }
-    std::net::TcpListener::bind(("127.0.0.1", 0)).expect("ws host bind 127.0.0.1:0")
+    std::net::TcpListener::bind((host, 0)).expect("ws host bind")
+}
+
+/// axum 共享状态：终端核心 + Host 身份。
+#[derive(Clone)]
+struct WsState {
+    core: Arc<TerminalCore>,
+    identity: Arc<HostIdentity>,
 }
 
 /// 在 tokio 上跑 axum WS server（消费 `bind()` 得到的 std listener）。
-pub async fn serve(std_listener: std::net::TcpListener, core: Arc<TerminalCore>) {
+pub async fn serve(std_listener: std::net::TcpListener, core: Arc<TerminalCore>, identity: Arc<HostIdentity>) {
     if std_listener.set_nonblocking(true).is_err() {
         return;
     }
@@ -63,23 +75,28 @@ pub async fn serve(std_listener: std::net::TcpListener, core: Arc<TerminalCore>)
         Ok(l) => l,
         Err(_) => return,
     };
-    let app = Router::new().route("/ws", any(ws_upgrade)).with_state(core);
-    let _ = axum::serve(listener, app).await;
+    let app = Router::new().route("/ws", any(ws_upgrade)).with_state(WsState { core, identity });
+    let _ = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await;
 }
 
 async fn ws_upgrade(
     ws: WebSocketUpgrade,
-    State(core): State<Arc<TerminalCore>>,
+    State(st): State<WsState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
 ) -> Response {
-    if !host_allowed(&headers) {
+    if !host_allowed(&headers, &addr) {
         return (StatusCode::FORBIDDEN, "host not allowed").into_response();
     }
-    ws.on_upgrade(move |socket| handle_conn(socket, core))
+    let is_remote = !addr.ip().is_loopback();
+    ws.on_upgrade(move |socket| handle_conn(socket, st.core, st.identity, is_remote))
 }
 
-/// DNS rebinding 基础防护：仅放行 localhost/环回 Host（已只绑 127.0.0.1，此为深度防御）。
-fn host_allowed(headers: &HeaderMap) -> bool {
+/// 本机连接：Host 头须 localhost（防浏览器 DNS rebinding）。远程(LAN)：放行——E2E + 公钥信任另行强制。
+fn host_allowed(headers: &HeaderMap, addr: &SocketAddr) -> bool {
+    if !addr.ip().is_loopback() {
+        return true;
+    }
     match headers.get(axum::http::header::HOST).and_then(|v| v.to_str().ok()) {
         None => true,
         Some(h) => {
@@ -89,22 +106,75 @@ fn host_allowed(headers: &HeaderMap) -> bool {
     }
 }
 
+/// 出站消息：writer 按是否加密决定封装为 WS Text/Binary（明文）或密文信封。
+enum Outbound {
+    Json(String),
+    Terminal(Vec<u8>),
+}
+
+/// 校验 `e2ee_hello` 并用 Host 私钥协商加密盒；非 e2ee_hello/公钥无效返回 None。
+fn try_make_box(identity: &HostIdentity, text: &str) -> Option<SalsaBox> {
+    let hello: E2eeHello = serde_json::from_str(text).ok()?;
+    if hello.kind != E2eeHello::TYPE {
+        return None;
+    }
+    let client_pub = public_from_b64(&hello.key).ok()?;
+    Some(identity.keypair().box_with(&client_pub))
+}
+
 /// 单连接状态（read loop 单线程持有；forwarder 任务只持 out 克隆，不碰这些 map）。
 struct Conn {
     core: Arc<TerminalCore>,
-    out: mpsc::UnboundedSender<Message>,
+    out: mpsc::UnboundedSender<Outbound>,
+    cipher: Option<Arc<SalsaBox>>, // Some = E2E 加密通道（read loop 解，writer 封）
     next_slot: u8,
     slot_term: HashMap<u8, String>,
     forwarders: HashMap<u8, JoinHandle<()>>,
 }
 
-async fn handle_conn(socket: WebSocket, core: Arc<TerminalCore>) {
+async fn handle_conn(socket: WebSocket, core: Arc<TerminalCore>, identity: Arc<HostIdentity>, is_remote: bool) {
     let (mut sink, mut stream) = socket.split();
-    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Message>();
-    // 写任务：单一所有者写 sink（handler 与各 forwarder 都经 out_tx 投递）
+
+    // ── E2E 协商（看首帧）：e2ee_hello→建盒+回 ready；远程无 E2E→拒；本机明文→首帧作业务 ──
+    let mut cipher: Option<Arc<SalsaBox>> = None;
+    let mut first_business: Option<Message> = None;
+    match stream.next().await {
+        Some(Ok(Message::Text(t))) => {
+            if let Some(b) = try_make_box(&identity, &t) {
+                let ready = serde_json::to_string(&E2eeReady::default()).unwrap_or_default();
+                if sink.send(Message::Text(ready.into())).await.is_err() {
+                    return;
+                }
+                cipher = Some(Arc::new(b));
+            } else if is_remote {
+                let _ = sink.send(Message::Close(None)).await;
+                return;
+            } else {
+                first_business = Some(Message::Text(t));
+            }
+        }
+        Some(Ok(msg)) => {
+            if is_remote {
+                let _ = sink.send(Message::Close(None)).await;
+                return;
+            }
+            first_business = Some(msg);
+        }
+        _ => return,
+    }
+
+    // ── 写任务：持 cipher，按需封装出站 ──
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Outbound>();
+    let cipher_w = cipher.clone();
     let writer = tokio::spawn(async move {
-        while let Some(m) = out_rx.recv().await {
-            if sink.send(m).await.is_err() {
+        while let Some(o) = out_rx.recv().await {
+            let msg = match (&cipher_w, o) {
+                (Some(b), Outbound::Json(s)) => Message::Binary(seal_frame(b, InnerKind::Json, s.as_bytes()).into()),
+                (Some(b), Outbound::Terminal(t)) => Message::Binary(seal_frame(b, InnerKind::Terminal, &t).into()),
+                (None, Outbound::Json(s)) => Message::Text(s.into()),
+                (None, Outbound::Terminal(t)) => Message::Binary(t.into()),
+            };
+            if sink.send(msg).await.is_err() {
                 break;
             }
         }
@@ -113,17 +183,19 @@ async fn handle_conn(socket: WebSocket, core: Arc<TerminalCore>) {
     let mut conn = Conn {
         core,
         out: out_tx,
+        cipher,
         next_slot: 0,
         slot_term: HashMap::new(),
         forwarders: HashMap::new(),
     };
+    if let Some(m) = first_business {
+        conn.on_inbound(m);
+    }
     while let Some(Ok(msg)) = stream.next().await {
-        match msg {
-            Message::Text(t) => conn.handle_text(&t),
-            Message::Binary(b) => conn.handle_binary(b.as_ref()),
-            Message::Close(_) => break,
-            _ => {}
+        if matches!(msg, Message::Close(_)) {
+            break;
         }
+        conn.on_inbound(msg);
     }
     for (_, h) in conn.forwarders.drain() {
         h.abort();
@@ -134,11 +206,30 @@ async fn handle_conn(socket: WebSocket, core: Arc<TerminalCore>) {
 
 impl Conn {
     fn send_json<T: Serialize>(&self, v: &T) {
-        let text = serde_json::to_string(v).unwrap_or_default();
-        let _ = self.out.send(Message::Text(text.into()));
+        let _ = self.out.send(Outbound::Json(serde_json::to_string(v).unwrap_or_default()));
     }
     fn send_binary(&self, bytes: Vec<u8>) {
-        let _ = self.out.send(Message::Binary(bytes.into()));
+        let _ = self.out.send(Outbound::Terminal(bytes));
+    }
+    /// 入站分发：加密通道→`open_frame` 解后按 InnerKind 派发；明文→Text=JSON / Binary=终端帧。
+    fn on_inbound(&mut self, msg: Message) {
+        match (&self.cipher, msg) {
+            (Some(b), Message::Binary(data)) => {
+                if let Ok((kind, plain)) = open_frame(b, data.as_ref()) {
+                    match kind {
+                        InnerKind::Json => {
+                            if let Ok(s) = std::str::from_utf8(&plain) {
+                                self.handle_text(s);
+                            }
+                        }
+                        InnerKind::Terminal => self.handle_binary(&plain),
+                    }
+                }
+            }
+            (None, Message::Text(t)) => self.handle_text(&t),
+            (None, Message::Binary(b)) => self.handle_binary(b.as_ref()),
+            _ => {}
+        }
     }
     fn send_err(&self, req_id: &str, req_type: &str, error: &str, code: &str) {
         self.send_json(&rpc::RpcError {
@@ -261,14 +352,14 @@ impl Conn {
                 match rx.recv().await {
                     Ok((rev, bytes)) => {
                         let frame = encode_revision_frame(Opcode::Output, slot, rev, &bytes);
-                        if out.send(Message::Binary(frame.into())).is_err() {
+                        if out.send(Outbound::Terminal(frame)).is_err() {
                             break;
                         }
                     }
                     Err(RecvError::Lagged(_)) => {
                         if let Some((base, snap)) = core.snapshot(&term_id) {
                             let frame = encode_revision_frame(Opcode::Restore, slot, base, &snap);
-                            if out.send(Message::Binary(frame.into())).is_err() {
+                            if out.send(Outbound::Terminal(frame)).is_err() {
                                 break;
                             }
                         }
@@ -330,9 +421,10 @@ mod tests {
 
     fn start_host() -> u16 {
         let core = Arc::new(TerminalCore::default());
-        let listener = bind();
+        let identity = Arc::new(HostIdentity::load_or_create());
+        let listener = bind(false);
         let port = listener.local_addr().unwrap().port();
-        tokio::spawn(serve(listener, core));
+        tokio::spawn(serve(listener, core, identity));
         port
     }
     async fn connect(port: u16) -> Ws {

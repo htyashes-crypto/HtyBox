@@ -29,6 +29,21 @@ export const listSkills = (projectDir?: string) =>
 export const listProjectSkills = (projectDir: string) =>
   invoke<Skill[]>("list_project_skills", { projectDir });
 
+// ── L3 双端：配对 / LAN ──
+export interface PairingOffer {
+  offerUrl: string;
+  qrSvg: string;
+  serverId: string;
+  port: number;
+  lanEndpoint: string | null;
+}
+/** 生成配对 offer（二维码 SVG + 链接），供「连接」设置页展示。 */
+export const pairingOffer = () => invoke<PairingOffer>("pairing_offer");
+/** 读 LAN(0.0.0.0) 开关。 */
+export const getLanEnabled = () => invoke<boolean>("lan_enabled");
+/** 写 LAN 开关（重启 app 后绑定生效）。 */
+export const setLanEnabled = (enabled: boolean) => invoke<void>("set_lan_enabled", { enabled });
+
 export const listMemories = (slug: string) =>
   invoke<MemoryItem[]>("list_memories", { slug });
 

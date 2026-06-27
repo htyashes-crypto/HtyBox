@@ -4,6 +4,7 @@ import { FONTS, applyFont } from "../fonts";
 import { THEMES, applyTheme, watchSystemTheme } from "../theme";
 import { loadIgnore } from "../fileIgnore";
 import { countWorkspaceFiles } from "../catalog";
+import ConnectionSettings from "./ConnectionSettings";
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -79,7 +80,7 @@ export default function SettingsModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-[460px] rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-5 shadow-2xl"
+        className="max-h-[85vh] w-[460px] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-5 shadow-2xl"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-bold text-[var(--text)]">设置</h2>
@@ -213,6 +214,8 @@ export default function SettingsModal({
               </span>
             </div>
           </div>
+
+          <ConnectionSettings />
         </div>
 
         <div className="mt-4 border-t border-[var(--border)] pt-3 text-[10px] text-[var(--text-3)]">

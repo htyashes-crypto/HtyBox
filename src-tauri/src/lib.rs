@@ -1,14 +1,17 @@
 mod broker;
 mod catalog;
 mod fs_tree;
+mod host_identity;
 mod pty;
 mod sessions;
 mod terminal_core;
 mod watcher;
 mod ws_host;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use host_identity::HostIdentity;
 use pty::SpawnOptions;
 use terminal_core::TerminalCore;
 use tauri::ipc::Channel;
@@ -17,13 +20,80 @@ use tauri::State;
 struct AppState {
     terminal: Arc<TerminalCore>,
     broker: Arc<broker::Broker>,
-    ws_port: u16, // L2：本机 WS Host 端口（前端/未来配对取用）
+    ws_port: u16, // L2：本机 WS Host 端口（前端/配对取用）
+    identity: Arc<HostIdentity>, // L3：Host 身份（公钥即配对信任锚）
+    lan_enabled: Arc<AtomicBool>, // L3：LAN(0.0.0.0) 开关（绑定在启动时按此决定，改动需重启）
 }
 
 /// L2：前端查询本机 WS Host 端口。
 #[tauri::command]
 fn ws_port(state: State<'_, AppState>) -> u16 {
     state.ws_port
+}
+
+/// L3：配对 offer（二维码 SVG + 链接）。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PairingOffer {
+    offer_url: String,
+    qr_svg: String,
+    server_id: String,
+    port: u16,
+    lan_endpoint: Option<String>, // "ip:port"（LAN 开启且可探测到时）
+}
+
+fn host_display_name() -> String {
+    std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .unwrap_or_else(|_| "HtyBox Host".to_string())
+}
+
+/// 探测本机 LAN IPv4（连 UDP 不实发，取路由源地址）。
+fn detect_lan_ip() -> Option<String> {
+    let s = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    s.connect("8.8.8.8:80").ok()?;
+    s.local_addr().ok().map(|a| a.ip().to_string())
+}
+
+/// L3：生成配对 offer + 二维码（供设置「连接」页展示）。
+#[tauri::command]
+fn pairing_offer(state: State<'_, AppState>) -> Result<PairingOffer, String> {
+    let lan = if state.lan_enabled.load(Ordering::Relaxed) {
+        detect_lan_ip().map(|host| htybox_link::offer::LanEndpoint { host, port: state.ws_port })
+    } else {
+        None
+    };
+    let lan_endpoint = lan.as_ref().map(|l| format!("{}:{}", l.host, l.port));
+    let offer = htybox_link::offer::ConnectionOffer {
+        v: 1,
+        server_id: state.identity.server_id().to_string(),
+        host_name: host_display_name(),
+        host_public_key_b64: state.identity.public_b64(),
+        lan,
+        relay: None, // relay 留 L4
+    };
+    let offer_url = htybox_link::offer::encode_offer_url(&offer).map_err(|e| e.to_string())?;
+    let code = qrcode::QrCode::new(offer_url.as_bytes()).map_err(|e| e.to_string())?;
+    let qr_svg = code
+        .render::<qrcode::render::svg::Color>()
+        .min_dimensions(220, 220)
+        .dark_color(qrcode::render::svg::Color("#2A211C"))
+        .light_color(qrcode::render::svg::Color("#faf9f5"))
+        .quiet_zone(true)
+        .build();
+    Ok(PairingOffer { offer_url, qr_svg, server_id: state.identity.server_id().to_string(), port: state.ws_port, lan_endpoint })
+}
+
+/// L3：读/写 LAN 开关（写后需重启 app 生效绑定）。
+#[tauri::command]
+fn lan_enabled(state: State<'_, AppState>) -> bool {
+    state.lan_enabled.load(Ordering::Relaxed)
+}
+#[tauri::command]
+fn set_lan_enabled(state: State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    host_identity::save_lan_enabled(enabled)?;
+    state.lan_enabled.store(enabled, Ordering::Relaxed);
+    Ok(())
 }
 
 #[tauri::command]
@@ -376,8 +446,12 @@ pub fn run() {
     let broker_for_setup = broker.clone();
     let terminal = Arc::new(TerminalCore::default());
     let terminal_for_setup = terminal.clone();
-    let ws_listener = ws_host::bind();
+    let lan_on = host_identity::load_lan_enabled();
+    let ws_listener = ws_host::bind(lan_on);
     let ws_listen_port = ws_listener.local_addr().map(|a| a.port()).unwrap_or(0);
+    let identity = Arc::new(HostIdentity::load_or_create());
+    let identity_for_setup = identity.clone();
+    let lan_enabled_state = Arc::new(AtomicBool::new(lan_on));
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -387,14 +461,16 @@ pub fn run() {
             terminal,
             broker,
             ws_port: ws_listen_port,
+            identity,
+            lan_enabled: lan_enabled_state,
         })
         .setup(move |app| {
             watcher::start(app.handle().clone());
             broker_for_setup.set_app(app.handle().clone()); // M7-B：broker 可发 "agent-wake" 事件
             terminal_for_setup.set_app(app.handle().clone()); // M7-H：子进程退出 emit "terminal-exit"
-            // L2：起本机 WS Host（跑在 Tauri 自带 tokio runtime 上）
+            // L2/L3：起本机 WS Host（跑在 Tauri 自带 tokio runtime 上），带 Host 身份做 E2E
             let core = terminal_for_setup.clone();
-            tauri::async_runtime::spawn(async move { ws_host::serve(ws_listener, core).await });
+            tauri::async_runtime::spawn(async move { ws_host::serve(ws_listener, core, identity_for_setup).await });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -403,6 +479,9 @@ pub fn run() {
             resize_terminal,
             close_terminal,
             ws_port,
+            pairing_offer,
+            lan_enabled,
+            set_lan_enabled,
             list_skills,
             list_project_skills,
             list_memories,
