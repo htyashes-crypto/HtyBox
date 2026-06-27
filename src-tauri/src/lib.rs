@@ -3,17 +3,27 @@ mod catalog;
 mod fs_tree;
 mod pty;
 mod sessions;
+mod terminal_core;
 mod watcher;
+mod ws_host;
 
 use std::sync::Arc;
 
-use pty::{PtyManager, SpawnOptions};
+use pty::SpawnOptions;
+use terminal_core::TerminalCore;
 use tauri::ipc::Channel;
-use tauri::{Manager, State};
+use tauri::State;
 
 struct AppState {
-    pty: PtyManager,
+    terminal: Arc<TerminalCore>,
     broker: Arc<broker::Broker>,
+    ws_port: u16, // L2：本机 WS Host 端口（前端/未来配对取用）
+}
+
+/// L2：前端查询本机 WS Host 端口。
+#[tauri::command]
+fn ws_port(state: State<'_, AppState>) -> u16 {
+    state.ws_port
 }
 
 #[tauri::command]
@@ -23,12 +33,12 @@ fn create_terminal(
     opts: SpawnOptions,
     on_output: Channel<Vec<u8>>,
 ) -> Result<(), String> {
-    state.pty.spawn(id, opts, on_output)
+    state.terminal.create(id, opts, Some(on_output), None)
 }
 
 #[tauri::command]
 fn write_terminal(state: State<'_, AppState>, id: String, data: String) -> Result<(), String> {
-    state.pty.write(&id, data.as_bytes())
+    state.terminal.write(&id, data.as_bytes())
 }
 
 #[tauri::command]
@@ -38,12 +48,12 @@ fn resize_terminal(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
-    state.pty.resize(&id, cols, rows)
+    state.terminal.resize(&id, cols, rows)
 }
 
 #[tauri::command]
 fn close_terminal(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    state.pty.close(&id)
+    state.terminal.close(&id)
 }
 
 #[tauri::command]
@@ -364,19 +374,27 @@ fn write_agent_brief(cwd: String, agent_id: String, content: String) -> Result<(
 pub fn run() {
     let broker = broker::start();
     let broker_for_setup = broker.clone();
+    let terminal = Arc::new(TerminalCore::default());
+    let terminal_for_setup = terminal.clone();
+    let ws_listener = ws_host::bind();
+    let ws_listen_port = ws_listener.local_addr().map(|a| a.port()).unwrap_or(0);
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
-            pty: PtyManager::default(),
+            terminal,
             broker,
+            ws_port: ws_listen_port,
         })
         .setup(move |app| {
             watcher::start(app.handle().clone());
             broker_for_setup.set_app(app.handle().clone()); // M7-B：broker 可发 "agent-wake" 事件
-            app.state::<AppState>().pty.set_app(app.handle().clone()); // M7-H：子进程退出 emit "terminal-exit"
+            terminal_for_setup.set_app(app.handle().clone()); // M7-H：子进程退出 emit "terminal-exit"
+            // L2：起本机 WS Host（跑在 Tauri 自带 tokio runtime 上）
+            let core = terminal_for_setup.clone();
+            tauri::async_runtime::spawn(async move { ws_host::serve(ws_listener, core).await });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -384,6 +402,7 @@ pub fn run() {
             write_terminal,
             resize_terminal,
             close_terminal,
+            ws_port,
             list_skills,
             list_project_skills,
             list_memories,

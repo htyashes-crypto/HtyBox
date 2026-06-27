@@ -33,7 +33,14 @@ tiny_http = "0.12.0"
 toml_edit = "0.25.12"
 trash = "5"
 tauri-plugin-process = "2"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "sync", "net", "io-util", "time"] }
+axum = { version = "0.8.9", features = ["ws"] }
+futures-util = "0.3.32"
+htybox-link = { path = "../../HtyBox_link/crates/htybox-link" }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
+
+[dev-dependencies]
+tokio-tungstenite = "0.29"
 
