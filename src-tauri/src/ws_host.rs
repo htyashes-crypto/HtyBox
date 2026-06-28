@@ -109,10 +109,28 @@ fn host_allowed(headers: &HeaderMap, addr: &SocketAddr) -> bool {
     }
 }
 
-/// 出站消息：writer 按是否加密决定封装为 WS Text/Binary（明文）或密文信封。
+/// 出站消息：按是否加密封装为 WS Text/Binary（明文）或密文信封。
 enum Outbound {
     Json(String),
     Terminal(Vec<u8>),
+}
+
+/// transport 无关的规范化 WS 消息：axum 入站（LAN/本机）与 tokio-tungstenite 出站
+/// （relay 数据 socket）共用核心 [`run_conn`]，各自适配器只做 `WsMsg` ↔ 具体帧的转换。
+pub(crate) enum WsMsg {
+    Text(String),
+    Binary(Vec<u8>),
+    Close,
+}
+
+/// 把一条出站业务消息按 cipher 封装为规范化 WS 帧（加密→密文二进制；明文→Text/Binary）。
+fn outbound_to_wsmsg(cipher: &Option<Arc<SalsaBox>>, o: Outbound) -> WsMsg {
+    match (cipher, o) {
+        (Some(b), Outbound::Json(s)) => WsMsg::Binary(seal_frame(b, InnerKind::Json, s.as_bytes())),
+        (Some(b), Outbound::Terminal(t)) => WsMsg::Binary(seal_frame(b, InnerKind::Terminal, &t)),
+        (None, Outbound::Json(s)) => WsMsg::Text(s),
+        (None, Outbound::Terminal(t)) => WsMsg::Binary(t),
+    }
 }
 
 /// 校验 `e2ee_hello` 并用 Host 私钥协商加密盒；非 e2ee_hello/公钥无效返回 None。
@@ -137,6 +155,7 @@ struct Conn {
     forwarders: HashMap<u8, JoinHandle<()>>,
 }
 
+/// axum 入站连接适配器（LAN/本机）：把 axum `WebSocket` 桥接到 transport 无关核心 [`run_conn`]。
 async fn handle_conn(
     socket: WebSocket,
     core: Arc<TerminalCore>,
@@ -145,47 +164,92 @@ async fn handle_conn(
     is_remote: bool,
 ) {
     let (mut sink, mut stream) = socket.split();
+    let (in_tx, in_rx) = mpsc::unbounded_channel::<WsMsg>();
+    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<WsMsg>();
 
+    // reader：axum 帧 → 规范化 WsMsg
+    let reader = tokio::spawn(async move {
+        while let Some(Ok(msg)) = stream.next().await {
+            let wm = match msg {
+                Message::Text(t) => WsMsg::Text(t.to_string()),
+                Message::Binary(b) => WsMsg::Binary(b.as_ref().to_vec()),
+                Message::Close(_) => break,
+                _ => continue,
+            };
+            if in_tx.send(wm).is_err() {
+                return;
+            }
+        }
+        let _ = in_tx.send(WsMsg::Close);
+    });
+
+    // writer：规范化 WsMsg → axum 帧
+    let writer = tokio::spawn(async move {
+        while let Some(wm) = out_rx.recv().await {
+            let msg = match wm {
+                WsMsg::Text(s) => Message::Text(s.into()),
+                WsMsg::Binary(b) => Message::Binary(b.into()),
+                WsMsg::Close => {
+                    let _ = sink.send(Message::Close(None)).await;
+                    break;
+                }
+            };
+            if sink.send(msg).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    run_conn(in_rx, out_tx, core, identity, workspaces, is_remote).await;
+    reader.abort();
+    writer.abort();
+}
+
+/// transport 无关的单连接核心：首帧 E2E 协商 → RPC/终端分发循环。
+/// `inbound`/`outbound` 由各 transport 适配器桥接（axum 入站；relay 数据 socket = tokio-tungstenite 出站）。
+pub(crate) async fn run_conn(
+    mut inbound: mpsc::UnboundedReceiver<WsMsg>,
+    outbound: mpsc::UnboundedSender<WsMsg>,
+    core: Arc<TerminalCore>,
+    identity: Arc<HostIdentity>,
+    workspaces: Arc<Mutex<WorkspacesResult>>,
+    is_remote: bool,
+) {
     // ── E2E 协商（看首帧）：e2ee_hello→建盒+回 ready；远程无 E2E→拒；本机明文→首帧作业务 ──
     let mut cipher: Option<Arc<SalsaBox>> = None;
-    let mut first_business: Option<Message> = None;
-    match stream.next().await {
-        Some(Ok(Message::Text(t))) => {
+    let mut first_business: Option<WsMsg> = None;
+    match inbound.recv().await {
+        Some(WsMsg::Text(t)) => {
             if let Some(b) = try_make_box(&identity, &t) {
                 let ready = serde_json::to_string(&E2eeReady::default()).unwrap_or_default();
-                if sink.send(Message::Text(ready.into())).await.is_err() {
+                if outbound.send(WsMsg::Text(ready)).is_err() {
                     return;
                 }
                 cipher = Some(Arc::new(b));
             } else if is_remote {
-                let _ = sink.send(Message::Close(None)).await;
+                let _ = outbound.send(WsMsg::Close);
                 return;
             } else {
-                first_business = Some(Message::Text(t));
+                first_business = Some(WsMsg::Text(t));
             }
         }
-        Some(Ok(msg)) => {
+        Some(other) => {
             if is_remote {
-                let _ = sink.send(Message::Close(None)).await;
+                let _ = outbound.send(WsMsg::Close);
                 return;
             }
-            first_business = Some(msg);
+            first_business = Some(other);
         }
-        _ => return,
+        None => return,
     }
 
-    // ── 写任务：持 cipher，按需封装出站 ──
-    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Outbound>();
+    // ── 出站转换任务：Conn 的 Outbound → 规范化 WsMsg（按 cipher 封装）→ outbound ──
+    let (conn_out_tx, mut conn_out_rx) = mpsc::unbounded_channel::<Outbound>();
     let cipher_w = cipher.clone();
-    let writer = tokio::spawn(async move {
-        while let Some(o) = out_rx.recv().await {
-            let msg = match (&cipher_w, o) {
-                (Some(b), Outbound::Json(s)) => Message::Binary(seal_frame(b, InnerKind::Json, s.as_bytes()).into()),
-                (Some(b), Outbound::Terminal(t)) => Message::Binary(seal_frame(b, InnerKind::Terminal, &t).into()),
-                (None, Outbound::Json(s)) => Message::Text(s.into()),
-                (None, Outbound::Terminal(t)) => Message::Binary(t.into()),
-            };
-            if sink.send(msg).await.is_err() {
+    let outbound_w = outbound.clone();
+    let converter = tokio::spawn(async move {
+        while let Some(o) = conn_out_rx.recv().await {
+            if outbound_w.send(outbound_to_wsmsg(&cipher_w, o)).is_err() {
                 break;
             }
         }
@@ -195,7 +259,7 @@ async fn handle_conn(
         core,
         server_id: identity.server_id().to_string(),
         workspaces,
-        out: out_tx,
+        out: conn_out_tx,
         cipher,
         next_slot: 0,
         slot_term: HashMap::new(),
@@ -204,8 +268,8 @@ async fn handle_conn(
     if let Some(m) = first_business {
         conn.on_inbound(m);
     }
-    while let Some(Ok(msg)) = stream.next().await {
-        if matches!(msg, Message::Close(_)) {
+    while let Some(msg) = inbound.recv().await {
+        if matches!(msg, WsMsg::Close) {
             break;
         }
         conn.on_inbound(msg);
@@ -213,8 +277,8 @@ async fn handle_conn(
     for (_, h) in conn.forwarders.drain() {
         h.abort();
     }
-    drop(conn); // 丢 out_tx → 写任务自然结束
-    writer.abort();
+    drop(conn); // 丢 conn_out_tx → 转换任务结束
+    converter.abort();
 }
 
 impl Conn {
@@ -225,10 +289,10 @@ impl Conn {
         let _ = self.out.send(Outbound::Terminal(bytes));
     }
     /// 入站分发：加密通道→`open_frame` 解后按 InnerKind 派发；明文→Text=JSON / Binary=终端帧。
-    fn on_inbound(&mut self, msg: Message) {
+    fn on_inbound(&mut self, msg: WsMsg) {
         match (&self.cipher, msg) {
-            (Some(b), Message::Binary(data)) => {
-                if let Ok((kind, plain)) = open_frame(b, data.as_ref()) {
+            (Some(b), WsMsg::Binary(data)) => {
+                if let Ok((kind, plain)) = open_frame(b, &data) {
                     match kind {
                         InnerKind::Json => {
                             if let Ok(s) = std::str::from_utf8(&plain) {
@@ -239,8 +303,8 @@ impl Conn {
                     }
                 }
             }
-            (None, Message::Text(t)) => self.handle_text(&t),
-            (None, Message::Binary(b)) => self.handle_binary(b.as_ref()),
+            (None, WsMsg::Text(t)) => self.handle_text(&t),
+            (None, WsMsg::Binary(b)) => self.handle_binary(&b),
             _ => {}
         }
     }

@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { getLanEnabled, pairingOffer, setLanEnabled, type PairingOffer } from "../catalog";
+import {
+  getLanEnabled,
+  getRelayConfig,
+  getRelayStatus,
+  pairingOffer,
+  setLanEnabled,
+  setRelayConfig,
+  type PairingOffer,
+} from "../catalog";
 
 /** 小开关（与 SettingsModal 同风格，本组件自带以解耦）。 */
 function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
@@ -19,6 +27,10 @@ export default function ConnectionSettings() {
   const [lan, setLan] = useState(false);
   const [copied, setCopied] = useState(false);
   const [needRestart, setNeedRestart] = useState(false);
+  const [relayEndpoint, setRelayEndpoint] = useState("");
+  const [relayTls, setRelayTls] = useState(true);
+  const [relayEnabled, setRelayEnabled] = useState(false);
+  const [relayOnline, setRelayOnline] = useState(false);
 
   const reload = () => {
     pairingOffer()
@@ -27,8 +39,26 @@ export default function ConnectionSettings() {
     getLanEnabled()
       .then(setLan)
       .catch(() => {});
+    getRelayConfig()
+      .then((c) => {
+        setRelayEndpoint(c.endpoint ?? "");
+        setRelayTls(c.useTls);
+        setRelayEnabled(c.enabled);
+        setRelayOnline(c.online);
+      })
+      .catch(() => {});
   };
   useEffect(reload, []);
+
+  // relay 在线状态轮询（连接页打开期间）
+  useEffect(() => {
+    const i = setInterval(() => {
+      getRelayStatus()
+        .then(setRelayOnline)
+        .catch(() => {});
+    }, 3000);
+    return () => clearInterval(i);
+  }, []);
 
   const toggleLan = async () => {
     const next = !lan;
@@ -39,6 +69,28 @@ export default function ConnectionSettings() {
       reload();
     } catch {
       setLan(!next); // 失败回滚
+    }
+  };
+
+  const saveRelay = (endpoint: string, tls: boolean, enabled: boolean) =>
+    setRelayConfig(endpoint.trim() ? endpoint.trim() : null, tls, enabled).then(reload);
+
+  const toggleRelay = async () => {
+    const next = !relayEnabled;
+    setRelayEnabled(next);
+    try {
+      await saveRelay(relayEndpoint, relayTls, next);
+    } catch {
+      setRelayEnabled(!next); // 失败回滚
+    }
+  };
+  const toggleRelayTls = async () => {
+    const next = !relayTls;
+    setRelayTls(next);
+    try {
+      await saveRelay(relayEndpoint, next, relayEnabled);
+    } catch {
+      setRelayTls(!next);
     }
   };
 
@@ -57,7 +109,7 @@ export default function ConnectionSettings() {
     <div className="border-t border-[var(--border-soft)] pt-5">
       <div className="mb-1 text-[13px] font-semibold text-[var(--text)]">连接（手机配对）</div>
       <div className="mb-3 text-[11px] leading-relaxed text-[var(--text-3)]">
-        在手机上用 HtyBox 扫码或粘贴链接，即可远程查看 / 操控本机终端。仅在同一局域网内可用（relay 远程后续支持）。
+        在手机上用 HtyBox 扫码或粘贴链接，即可远程查看 / 操控本机终端。支持局域网直连，或经 relay 中继远程访问（异地 / 蜂窝）。
       </div>
 
       <div className="mb-2 flex items-center justify-between gap-3 text-[12px]">
@@ -85,8 +137,39 @@ export default function ConnectionSettings() {
         </div>
       )}
 
-      {lan ? (
-        offer && offer.lanEndpoint ? (
+      {/* L4：relay 远程中继（独立于 LAN，改动即时生效、无需重启） */}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[12px] text-[var(--text)]">relay 远程中继（异地 / 蜂窝）</div>
+          <div className="text-[10.5px] text-[var(--text-3)]">Host 反连自托管中继，手机不在同 WiFi 也能连；relay 只转发端到端密文</div>
+        </div>
+        <Toggle on={relayEnabled} onChange={toggleRelay} />
+      </div>
+      {relayEnabled && (
+        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] p-3">
+          <label className="text-[10.5px] text-[var(--text-3)]">中继地址（host:port）</label>
+          <input
+            value={relayEndpoint}
+            onChange={(e) => setRelayEndpoint(e.target.value)}
+            onBlur={() => saveRelay(relayEndpoint, relayTls, relayEnabled)}
+            placeholder="relay.example.com:443 或 127.0.0.1:6868"
+            className="rounded-md border border-[var(--border)] bg-[var(--elevated)] px-2 py-1 font-mono text-[12px] text-[var(--text)] outline-none focus:border-[var(--accent)]"
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-[var(--text-2)]">使用 TLS（wss，生产环境）</span>
+            <Toggle on={relayTls} onChange={toggleRelayTls} />
+          </div>
+          <div className="flex items-center gap-1.5 text-[10.5px]">
+            <span className={"h-2 w-2 rounded-full " + (relayOnline ? "bg-[#3fa563]" : "bg-[var(--border)]")} />
+            <span className="text-[var(--text-3)]">
+              {relayOnline ? "已接入中继" : relayEndpoint.trim() ? "未接入（连接中 / 检查地址 / 中继是否在线）" : "填写中继地址后启用"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {lan || (relayEnabled && relayEndpoint.trim()) ? (
+        offer && (offer.lanEndpoint || (relayEnabled && relayEndpoint.trim())) ? (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--elevated)] p-4">
             <div className="h-[220px] w-[220px] [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: offer.qrSvg }} />
             <div className="text-[10.5px] text-[var(--text-3)]">扫描二维码，或复制链接发到手机</div>
@@ -98,11 +181,11 @@ export default function ConnectionSettings() {
             </button>
           </div>
         ) : (
-          <div className="text-[11px] text-[var(--text-3)]">正在生成配对信息…（确认本机已联网以探测 LAN 地址）</div>
+          <div className="text-[11px] text-[var(--text-3)]">正在生成配对信息…（LAN 需联网探测地址；relay 需填写中继地址）</div>
         )
       ) : (
         <div className="rounded-md bg-[var(--surface-soft)] px-3 py-2.5 text-[11px] text-[var(--text-3)]">
-          开启「局域网访问」后在此显示配对二维码（手机需与本机同一 WiFi）。
+          开启「局域网访问」或配置 relay 中继后，在此显示配对二维码。
         </div>
       )}
     </div>

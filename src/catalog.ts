@@ -44,6 +44,21 @@ export const getLanEnabled = () => invoke<boolean>("lan_enabled");
 /** 写 LAN 开关（重启 app 后绑定生效）。 */
 export const setLanEnabled = (enabled: boolean) => invoke<void>("set_lan_enabled", { enabled });
 
+/** L4 relay 配置（endpoint/useTls/enabled + 实时 online）。 */
+export interface RelayConfig {
+  endpoint: string | null;
+  useTls: boolean;
+  enabled: boolean;
+  online: boolean;
+}
+/** 读 relay 配置（设置「连接」页展示）。 */
+export const getRelayConfig = () => invoke<RelayConfig>("relay_config");
+/** 写 relay 配置（持久化 + 重启反连）。 */
+export const setRelayConfig = (endpoint: string | null, useTls: boolean, enabled: boolean) =>
+  invoke<void>("set_relay_config", { endpoint, useTls, enabled });
+/** relay 控制连在线状态（轮询）。 */
+export const getRelayStatus = () => invoke<boolean>("relay_status");
+
 export const listMemories = (slug: string) =>
   invoke<MemoryItem[]>("list_memories", { slug });
 

@@ -38,10 +38,11 @@ axum = { version = "0.8.9", features = ["ws"] }
 futures-util = "0.3.32"
 htybox-link = { path = "../../HtyBox_link/crates/htybox-link" }
 qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
+tokio-tungstenite = "0.29" # L4: relay 反连客户端（控制+数据 socket）；默认特性 connect+handshake（ws://），rustls 留部署(决策4修正)
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
 
 [dev-dependencies]
-tokio-tungstenite = "0.29"
+# tokio-tungstenite 已提为正式依赖（relay 反连）；测试沿用同一 crate
 

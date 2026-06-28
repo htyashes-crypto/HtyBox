@@ -3,6 +3,7 @@ mod catalog;
 mod fs_tree;
 mod host_identity;
 mod pty;
+mod relay_client;
 mod sessions;
 mod terminal_core;
 mod watcher;
@@ -24,6 +25,44 @@ struct AppState {
     identity: Arc<HostIdentity>, // L3：Host 身份（公钥即配对信任锚）
     lan_enabled: Arc<AtomicBool>, // L3：LAN(0.0.0.0) 开关（绑定在启动时按此决定，改动需重启）
     workspaces: Arc<Mutex<htybox_link::rpc::WorkspacesResult>>, // L5-4P：桌面前端发布的工作区（供远程镜像）
+    relay_cfg: Arc<Mutex<RelayCfg>>, // L4：relay 反连配置（endpoint/use_tls/enabled）
+    relay_online: Arc<AtomicBool>, // L4：relay 控制连在线状态（relay_client 维护，UI 轮询）
+    relay_task: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>, // L4：反连任务句柄（改配置时 abort 重启）
+}
+
+/// L4：relay 反连运行配置（持久化在 host-config.json）。
+#[derive(Clone, Default)]
+struct RelayCfg {
+    endpoint: Option<String>,
+    use_tls: bool,
+    enabled: bool,
+}
+
+/// L4：按当前 relay 配置 (重)启动反连任务——先 abort 旧任务；启用且有 endpoint 则起新任务。
+fn restart_relay(
+    relay_cfg: &Arc<Mutex<RelayCfg>>,
+    relay_task: &Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>,
+    relay_online: &Arc<AtomicBool>,
+    terminal: &Arc<TerminalCore>,
+    identity: &Arc<HostIdentity>,
+    workspaces: &Arc<Mutex<htybox_link::rpc::WorkspacesResult>>,
+) {
+    if let Some(h) = relay_task.lock().unwrap().take() {
+        h.abort();
+    }
+    relay_online.store(false, Ordering::Relaxed);
+    let cfg = relay_cfg.lock().unwrap().clone();
+    if let (true, Some(endpoint)) = (cfg.enabled, cfg.endpoint) {
+        let h = tauri::async_runtime::spawn(relay_client::run(
+            endpoint,
+            cfg.use_tls,
+            terminal.clone(),
+            identity.clone(),
+            workspaces.clone(),
+            relay_online.clone(),
+        ));
+        *relay_task.lock().unwrap() = Some(h);
+    }
 }
 
 /// L5-4P：桌面前端把已打开工作区 + 当前激活发布给 Host，供远程客户端镜像。
@@ -77,13 +116,23 @@ fn pairing_offer(state: State<'_, AppState>) -> Result<PairingOffer, String> {
         None
     };
     let lan_endpoint = lan.as_ref().map(|l| format!("{}:{}", l.host, l.port));
+    let relay = {
+        let cfg = state.relay_cfg.lock().unwrap();
+        if cfg.enabled {
+            cfg.endpoint
+                .clone()
+                .map(|endpoint| htybox_link::offer::RelayEndpoint { endpoint, use_tls: cfg.use_tls })
+        } else {
+            None
+        }
+    };
     let offer = htybox_link::offer::ConnectionOffer {
         v: 1,
         server_id: state.identity.server_id().to_string(),
         host_name: host_display_name(),
         host_public_key_b64: state.identity.public_b64(),
         lan,
-        relay: None, // relay 留 L4
+        relay,
     };
     let offer_url = htybox_link::offer::encode_offer_url(&offer).map_err(|e| e.to_string())?;
     let code = qrcode::QrCode::new(offer_url.as_bytes()).map_err(|e| e.to_string())?;
@@ -107,6 +156,59 @@ fn set_lan_enabled(state: State<'_, AppState>, enabled: bool) -> Result<(), Stri
     host_identity::save_lan_enabled(enabled)?;
     state.lan_enabled.store(enabled, Ordering::Relaxed);
     Ok(())
+}
+
+/// L4：relay 配置（持久化的 endpoint/use_tls/enabled + 实时 online）。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RelayConfigDto {
+    endpoint: Option<String>,
+    use_tls: bool,
+    enabled: bool,
+    online: bool,
+}
+
+/// L4：读 relay 配置（设置「连接」页展示）。
+#[tauri::command]
+fn relay_config(state: State<'_, AppState>) -> RelayConfigDto {
+    let cfg = state.relay_cfg.lock().unwrap().clone();
+    RelayConfigDto {
+        endpoint: cfg.endpoint,
+        use_tls: cfg.use_tls,
+        enabled: cfg.enabled,
+        online: state.relay_online.load(Ordering::Relaxed),
+    }
+}
+
+/// L4：设置 relay 配置（持久化 + 重启反连）。
+#[tauri::command]
+fn set_relay_config(
+    state: State<'_, AppState>,
+    endpoint: Option<String>,
+    use_tls: bool,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut c = host_identity::load_host_config();
+    c.relay_endpoint = endpoint.clone();
+    c.relay_use_tls = use_tls;
+    c.relay_enabled = enabled;
+    host_identity::save_host_config(&c)?;
+    *state.relay_cfg.lock().unwrap() = RelayCfg { endpoint, use_tls, enabled };
+    restart_relay(
+        &state.relay_cfg,
+        &state.relay_task,
+        &state.relay_online,
+        &state.terminal,
+        &state.identity,
+        &state.workspaces,
+    );
+    Ok(())
+}
+
+/// L4：relay 控制连在线状态（UI 轮询）。
+#[tauri::command]
+fn relay_status(state: State<'_, AppState>) -> bool {
+    state.relay_online.load(Ordering::Relaxed)
 }
 
 #[tauri::command]
@@ -467,6 +569,21 @@ pub fn run() {
     let lan_enabled_state = Arc::new(AtomicBool::new(lan_on));
     let workspaces = Arc::new(Mutex::new(htybox_link::rpc::WorkspacesResult::default()));
     let workspaces_for_ws = workspaces.clone();
+    // L4：relay 反连配置（从 host-config.json 读）+ 在线态 + 任务句柄；setup 中按启用状态起反连
+    let host_cfg = host_identity::load_host_config();
+    let relay_cfg = Arc::new(Mutex::new(RelayCfg {
+        endpoint: host_cfg.relay_endpoint.clone(),
+        use_tls: host_cfg.relay_use_tls,
+        enabled: host_cfg.relay_enabled,
+    }));
+    let relay_online = Arc::new(AtomicBool::new(false));
+    let relay_task: Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>> = Arc::new(Mutex::new(None));
+    let relay_cfg_setup = relay_cfg.clone();
+    let relay_online_setup = relay_online.clone();
+    let relay_task_setup = relay_task.clone();
+    let terminal_for_relay = terminal.clone();
+    let identity_for_relay = identity.clone();
+    let workspaces_for_relay = workspaces.clone();
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -479,6 +596,9 @@ pub fn run() {
             identity,
             lan_enabled: lan_enabled_state,
             workspaces,
+            relay_cfg,
+            relay_online,
+            relay_task,
         })
         .setup(move |app| {
             watcher::start(app.handle().clone());
@@ -487,6 +607,15 @@ pub fn run() {
             // L2/L3：起本机 WS Host（跑在 Tauri 自带 tokio runtime 上），带 Host 身份做 E2E
             let core = terminal_for_setup.clone();
             tauri::async_runtime::spawn(async move { ws_host::serve(ws_listener, core, identity_for_setup, workspaces_for_ws).await });
+            // L4：若已配置启用 relay，启动反连（控制 socket 退避重连）
+            restart_relay(
+                &relay_cfg_setup,
+                &relay_task_setup,
+                &relay_online_setup,
+                &terminal_for_relay,
+                &identity_for_relay,
+                &workspaces_for_relay,
+            );
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -498,6 +627,9 @@ pub fn run() {
             pairing_offer,
             lan_enabled,
             set_lan_enabled,
+            relay_config,
+            set_relay_config,
+            relay_status,
             set_workspaces,
             list_skills,
             list_project_skills,

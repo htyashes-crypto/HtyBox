@@ -22,11 +22,20 @@ struct PersistedIdentity {
     server_id: String,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct HostConfig {
+pub struct HostConfig {
     #[serde(default)]
-    lan_enabled: bool,
+    pub lan_enabled: bool,
+    /// L4：relay 端点 `host:port`（None=未配置）。
+    #[serde(default)]
+    pub relay_endpoint: Option<String>,
+    /// L4：relay 是否走 wss（生产 true；本地/LAN 测试 false）。
+    #[serde(default)]
+    pub relay_use_tls: bool,
+    /// L4：是否启用 relay 反连。
+    #[serde(default)]
+    pub relay_enabled: bool,
 }
 
 /// `config_dir()/HtyBox/`（best-effort 创建）。
@@ -83,21 +92,34 @@ impl HostIdentity {
     }
 }
 
-/// 读 LAN 开关（默认 false）。
-pub fn load_lan_enabled() -> bool {
-    let Some(dir) = config_dir() else { return false };
+/// 读全量本机配置（缺失/解析失败→默认；旧文件缺 relay 字段由 serde default 兼容）。
+pub fn load_host_config() -> HostConfig {
+    let Some(dir) = config_dir() else {
+        return HostConfig::default();
+    };
     std::fs::read_to_string(dir.join("host-config.json"))
         .ok()
         .and_then(|t| serde_json::from_str::<HostConfig>(&t).ok())
-        .map(|c| c.lan_enabled)
-        .unwrap_or(false)
+        .unwrap_or_default()
 }
 
-/// 写 LAN 开关。
-pub fn save_lan_enabled(enabled: bool) -> Result<(), String> {
+/// 写全量本机配置。
+pub fn save_host_config(cfg: &HostConfig) -> Result<(), String> {
     let dir = config_dir().ok_or("no config dir")?;
-    let text = serde_json::to_string_pretty(&HostConfig { lan_enabled: enabled }).map_err(|e| e.to_string())?;
+    let text = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
     std::fs::write(dir.join("host-config.json"), text).map_err(|e| e.to_string())
+}
+
+/// 读 LAN 开关（默认 false）。
+pub fn load_lan_enabled() -> bool {
+    load_host_config().lan_enabled
+}
+
+/// 写 LAN 开关（保留其余配置）。
+pub fn save_lan_enabled(enabled: bool) -> Result<(), String> {
+    let mut c = load_host_config();
+    c.lan_enabled = enabled;
+    save_host_config(&c)
 }
 
 #[cfg(unix)]
