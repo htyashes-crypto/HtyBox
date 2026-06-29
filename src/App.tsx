@@ -531,6 +531,12 @@ export default function App() {
           root={active.path}
           workspaceId={active.id}
           onClose={() => setShowQuickOpen(false)}
+          onEnsureSidebar={() => {
+            if (!sidebarVisible) {
+              setSidebarVisible(true);
+              setWsState(SIDEBAR_KEY, active.id, true);
+            }
+          }}
         />
       )}
 

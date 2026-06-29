@@ -17,12 +17,14 @@ export interface Settings {
   maxFiles: number;
   /** 界面主题：light=浅色奶油 / dark=暖调棕黑 / system=跟随系统。默认 light */
   theme: ThemeKey;
-  /** 文件单击行为：open=单击即打开/展开(现状,默认) / select=单击仅选中、双击才打开/展开(Windows 式)。文件树与全局搜索同步遵循 */
+  /** 文件单击行为：open=单击即打开/展开(现状,默认) / select=单击仅选中、双击才打开/展开(Windows 式)。仅文件树；全局搜索点击由 openFileFromSearch 单独控制 */
   fileClickMode: FileClickMode;
+  /** 全局搜索单击文件后：true=在编辑器打开 / false=仅在 File 页签定位选中、不打开(不切走终端，便于找文件喂给 AI)。默认 false */
+  openFileFromSearch: boolean;
 }
 
 const KEY = "htybox.settings.v1";
-const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false, fontFamily: "harmony", maxFiles: 100000, theme: "light", fileClickMode: "open" };
+const DEFAULTS: Settings = { hoverPreview: true, autoRelay: false, fontFamily: "harmony", maxFiles: 100000, theme: "light", fileClickMode: "open", openFileFromSearch: false };
 
 function load(): Settings {
   try {

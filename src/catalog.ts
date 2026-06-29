@@ -176,6 +176,8 @@ export interface FileRef {
 export interface ListFilesResult {
   files: FileRef[];
   total: number; // 工作区有效文件真实总数（files 可能因 maxFiles 截断）
+  folders: FileRef[]; // 工作区文件夹（与 files 同口径过滤，供搜索/定位）
+  folderTotal: number; // 文件夹真实总数（独立于 total 文件数语义）
 }
 export const listAllFiles = (
   root: string,

@@ -127,7 +127,7 @@ export default function SettingsModal({
           <div className="rounded-lg px-3 py-2.5">
             <div className="text-sm font-medium text-[var(--text)]">文件单击行为</div>
             <div className="mb-2.5 text-[11px] text-[var(--text-faint)]">
-              文件树与全局搜索通用；选「单击选中」可像资源管理器那样 Ctrl/Shift 多选后批量操作
+              作用于文件树（全局搜索单独由下方开关控制）；选「单击选中」可像资源管理器那样 Ctrl/Shift 多选后批量操作
             </div>
             <div className="grid grid-cols-2 gap-2">
               {CLICK_MODES.map((m) => {
@@ -152,6 +152,16 @@ export default function SettingsModal({
                 );
               })}
             </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-lg px-3 py-2.5 transition-colors hover:bg-[var(--surface-soft)]">
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-[var(--text)]">全局搜索后打开文件</div>
+              <div className="text-[11px] text-[var(--text-faint)]">
+                开：单击搜索结果即在编辑器打开；关：仅在 File 页签定位选中、不打开（适合找文件喂给 AI，不切走终端）
+              </div>
+            </div>
+            <Toggle on={s.openFileFromSearch} onChange={(v) => setSetting("openFileFromSearch", v)} />
           </div>
 
           <div className="rounded-lg px-3 py-2.5">

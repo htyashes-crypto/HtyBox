@@ -364,6 +364,28 @@ pub struct ListFilesResult {
     pub files: Vec<FileRef>,
     /// 工作区有效文件真实总数（即使 files 因 max_files 截断也照数完），供前端显示/判断是否截断。
     pub total: usize,
+    /// 收集到的前 max_files 个文件夹（与 files 同口径过滤；供 quick-open 搜索/定位）。
+    pub folders: Vec<FileRef>,
+    /// 工作区文件夹真实总数（独立于 total「文件数」语义）。
+    pub folder_total: usize,
+}
+
+/// 路径 → FileRef（name/rel/path），文件与文件夹收集共用，避免重复样板。
+fn make_file_ref(p: &Path, root_path: &Path) -> FileRef {
+    FileRef {
+        name: p
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string(),
+        rel: p
+            .strip_prefix(root_path)
+            .ok()
+            .and_then(|r| r.to_str())
+            .unwrap_or("")
+            .to_string(),
+        path: p.to_string_lossy().into_owned(),
+    }
 }
 
 /// 遍历工作区「有效文件」（统一口径）：跳 SKIP_DIRS（任意层级噪声目录）
@@ -374,13 +396,15 @@ fn walk_files(
     skip_folders: Vec<String>,
     skip_exts: Vec<String>,
     max_collect: usize,
-) -> (Vec<FileRef>, usize) {
+) -> ListFilesResult {
     use std::collections::HashSet;
     let root_path = Path::new(root);
     let folderset: HashSet<String> = skip_folders.into_iter().collect();
     let extset: HashSet<String> = skip_exts.into_iter().map(|e| e.to_lowercase()).collect();
     let mut out = Vec::new();
     let mut total = 0usize;
+    let mut folders = Vec::new();
+    let mut folder_total = 0usize;
     let walker = WalkDir::new(root_path).into_iter().filter_entry(|e| {
         if e.file_type().is_dir() {
             if let Some(n) = e.file_name().to_str() {
@@ -398,13 +422,25 @@ fn walk_files(
         true
     });
     for entry in walker.filter_map(|e| e.ok()) {
-        if total >= HARD_WALK_CAP {
+        if total + folder_total >= HARD_WALK_CAP {
             break;
         }
-        if !entry.file_type().is_file() {
+        let ft = entry.file_type();
+        let p = entry.path();
+        // 文件夹：filter_entry 已剔噪声/忽略名单（与文件同口径），独立计数收集；跳 root 自身（depth==0）。
+        if ft.is_dir() {
+            if entry.depth() == 0 {
+                continue;
+            }
+            folder_total += 1;
+            if folders.len() < max_collect {
+                folders.push(make_file_ref(p, root_path));
+            }
             continue;
         }
-        let p = entry.path();
+        if !ft.is_file() {
+            continue;
+        }
         if !extset.is_empty() {
             if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
                 if extset.contains(&ext.to_lowercase()) {
@@ -416,24 +452,14 @@ fn walk_files(
         if out.len() >= max_collect {
             continue; // 已达收集上限：只继续计数得真实总数，不再收集 FileRef
         }
-        let name = p
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
-        let rel = p
-            .strip_prefix(root_path)
-            .ok()
-            .and_then(|r| r.to_str())
-            .unwrap_or("")
-            .to_string();
-        out.push(FileRef {
-            name,
-            rel,
-            path: p.to_string_lossy().into_owned(),
-        });
+        out.push(make_file_ref(p, root_path));
     }
-    (out, total)
+    ListFilesResult {
+        files: out,
+        total,
+        folders,
+        folder_total,
+    }
 }
 
 /// 列工作区文件供 quick-open：收集前 max_files 个 + 返回有效文件真实总数。
@@ -445,8 +471,7 @@ pub fn list_all_files(
     skip_exts: Vec<String>,
     max_files: usize,
 ) -> ListFilesResult {
-    let (files, total) = walk_files(root, skip_folders, skip_exts, max_files);
-    ListFilesResult { files, total }
+    walk_files(root, skip_folders, skip_exts, max_files)
 }
 
 /// 只统计工作区有效文件总数（不收集列表，供设置面板「当前工作区文件数」显示）。
@@ -455,5 +480,5 @@ pub fn count_workspace_files(
     skip_folders: Vec<String>,
     skip_exts: Vec<String>,
 ) -> usize {
-    walk_files(root, skip_folders, skip_exts, 0).1
+    walk_files(root, skip_folders, skip_exts, 0).total
 }

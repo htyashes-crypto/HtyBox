@@ -4,6 +4,7 @@ import MemoryPanel from "./MemoryPanel";
 import FilePanel from "./FilePanel";
 import SessionPanel from "./SessionPanel";
 import { getWsState, setWsState } from "../wsState";
+import { registerSidebarTab } from "../dockBus";
 
 type Tab = "skill" | "memory" | "file" | "session";
 
@@ -100,6 +101,17 @@ export default function Sidebar({
     setTabState(t);
     setWsState(TAB_KEY, workspaceSlug, t);
   };
+  // 外部(全局搜索“仅选中”)请求把左栏切到指定页签：注册到 dockBus 总线，组件挂载期间在线
+  useEffect(
+    () =>
+      registerSidebarTab(workspaceSlug, (t) => {
+        if (VALID_TABS.includes(t as Tab)) {
+          setTabState(t as Tab);
+          setWsState(TAB_KEY, workspaceSlug, t as Tab);
+        }
+      }),
+    [workspaceSlug],
+  );
   return (
     <div className="flex h-full flex-col bg-[var(--surface)]">
       {/* 分段切换条（FanBox 风格） */}

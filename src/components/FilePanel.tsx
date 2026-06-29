@@ -12,7 +12,7 @@ import {
   revealInExplorer,
   type DirEntry,
 } from "../catalog";
-import { openEditor, openTerminalAt, registerActiveFileReveal } from "../dockBus";
+import { openEditor, openTerminalAt, registerActiveFileReveal, registerActiveFolderReveal } from "../dockBus";
 import FileContextMenu from "./FileContextMenu";
 import FileIgnoreModal from "./FileIgnoreModal";
 import PromptModal from "./ui/PromptModal";
@@ -218,8 +218,8 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
       saveFavFolders(root, next);
       return next;
     });
-  // 在树里展开各级祖先 + 该文件夹自身 + 高亮滚动到它
-  const revealFolder = (p: string) => {
+  // 在树里展开各级祖先 + 该文件夹自身 + 高亮滚动到它（收藏跳转 / 全局搜索单击文件夹复用）
+  const revealFolder = useCallback((p: string) => {
     const dirs: string[] = [];
     let d = p;
     while (d.startsWith(root) && d.length >= root.length) {
@@ -241,7 +241,8 @@ export default function FilePanel({ root, workspaceId }: { root: string; workspa
     });
     scrollDoneFor.current = null;
     setActiveFile(p); setSelected(new Set([p])); setAnchor(p);
-  };
+  }, [root, load]);
+  useEffect(() => registerActiveFolderReveal(workspaceId, revealFolder), [workspaceId, revealFolder]);
 
   // OS 文件导入回退路径：WebView 不支持 entry 接口时按 FileList（仅文件，无法递归文件夹）
   const importFiles = async (dir: string, files: FileList) => {
