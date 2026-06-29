@@ -68,6 +68,7 @@ struct TermEntry {
     scrollback: Arc<Mutex<Scrollback>>,
     revision: Arc<AtomicU64>,
     tx: broadcast::Sender<(u64, Vec<u8>)>,
+    resize_tx: broadcast::Sender<(u16, u16)>, // L4 修复：PTY 尺寸(桌面独占)变化广播给远程订阅者
     meta: Mutex<TermMeta>,
 }
 
@@ -76,6 +77,11 @@ pub struct Subscription {
     pub snapshot: Vec<u8>,
     pub baseline: u64,
     pub rx: broadcast::Receiver<(u64, Vec<u8>)>,
+    /// 订阅时的当前尺寸（客户端据此设置自身渲染网格，不回改 PTY）。
+    pub cols: u16,
+    pub rows: u16,
+    /// PTY 尺寸变化流（桌面 resize 时推送，远程渲染器跟随）。
+    pub resize_rx: broadcast::Receiver<(u16, u16)>,
 }
 
 /// 终端核心管理器（取代 M1 的 PtyManager）。
@@ -109,6 +115,7 @@ impl TerminalCore {
         let scrollback = Arc::new(Mutex::new(Scrollback::new(SCROLLBACK_CAP)));
         let revision = Arc::new(AtomicU64::new(0));
         let (tx, _) = broadcast::channel(BROADCAST_CAP);
+        let (resize_tx, _) = broadcast::channel(BROADCAST_CAP);
 
         // 读线程：唯一生产者，扇出 scrollback + 本地 Channel + broadcast。
         let mut reader = parts.reader;
@@ -156,6 +163,7 @@ impl TerminalCore {
                 scrollback,
                 revision,
                 tx,
+                resize_tx,
                 meta: Mutex::new(meta),
             },
         );
@@ -180,6 +188,8 @@ impl TerminalCore {
         let mut m = e.meta.lock().unwrap();
         m.cols = cols;
         m.rows = rows;
+        drop(m);
+        let _ = e.resize_tx.send((cols, rows)); // 通知远程订阅者跟随桌面尺寸
         Ok(())
     }
 
@@ -216,9 +226,14 @@ impl TerminalCore {
         let e = map.get(id)?;
         let sb = e.scrollback.lock().unwrap();
         let rx = e.tx.subscribe();
+        let resize_rx = e.resize_tx.subscribe();
         let baseline = e.revision.load(Ordering::Relaxed);
         let snapshot = sb.concat();
-        Some(Subscription { snapshot, baseline, rx })
+        let (cols, rows) = {
+            let m = e.meta.lock().unwrap();
+            (m.cols, m.rows)
+        };
+        Some(Subscription { snapshot, baseline, rx, cols, rows, resize_rx })
     }
 
     /// 取最新快照（慢订阅者 Lagged 后重新对齐用）。

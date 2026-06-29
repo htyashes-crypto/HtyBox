@@ -33,7 +33,7 @@ use htybox_link::rpc::{
     SubscribeTerminalParams, SubscribeTerminalResult, TerminalInfo, TerminalListResult, TerminalRef,
     WorkspacesResult,
 };
-use htybox_link::terminal::{decode_frame, decode_resize, encode_revision_frame, Opcode};
+use htybox_link::terminal::{decode_frame, encode_resize, encode_revision_frame, Opcode, Resize};
 
 static NEXT_TERM: AtomicU64 = AtomicU64::new(1);
 fn new_term_id() -> String {
@@ -436,7 +436,7 @@ impl Conn {
         self.send_json(&RpcResponse::new(
             types::TERMINAL_SUBSCRIBE_RESP,
             req_id,
-            SubscribeTerminalResult { slot, revision: sub.baseline },
+            SubscribeTerminalResult { slot, revision: sub.baseline, cols: sub.cols, rows: sub.rows },
         ));
         // visible-snapshot → 先发 Restore（历史重放）；client 按 revision<=baseline 去重
         if matches!(p.restore, RestoreMode::VisibleSnapshot { .. }) && !sub.snapshot.is_empty() {
@@ -447,24 +447,38 @@ impl Conn {
         let core = self.core.clone();
         let term_id = p.terminal_id.clone();
         let mut rx = sub.rx;
+        let mut resize_rx = sub.resize_rx;
         let h = tokio::spawn(async move {
             loop {
-                match rx.recv().await {
-                    Ok((rev, bytes)) => {
-                        let frame = encode_revision_frame(Opcode::Output, slot, rev, &bytes);
-                        if out.send(Outbound::Terminal(frame)).is_err() {
-                            break;
-                        }
-                    }
-                    Err(RecvError::Lagged(_)) => {
-                        if let Some((base, snap)) = core.snapshot(&term_id) {
-                            let frame = encode_revision_frame(Opcode::Restore, slot, base, &snap);
+                tokio::select! {
+                    out_evt = rx.recv() => match out_evt {
+                        Ok((rev, bytes)) => {
+                            let frame = encode_revision_frame(Opcode::Output, slot, rev, &bytes);
                             if out.send(Outbound::Terminal(frame)).is_err() {
                                 break;
                             }
                         }
-                    }
-                    Err(RecvError::Closed) => break,
+                        Err(RecvError::Lagged(_)) => {
+                            if let Some((base, snap)) = core.snapshot(&term_id) {
+                                let frame = encode_revision_frame(Opcode::Restore, slot, base, &snap);
+                                if out.send(Outbound::Terminal(frame)).is_err() {
+                                    break;
+                                }
+                            }
+                        }
+                        Err(RecvError::Closed) => break,
+                    },
+                    rsz_evt = resize_rx.recv() => match rsz_evt {
+                        // 桌面 resize → 推 Resize 帧，远程渲染器跟随尺寸（不回改 PTY）
+                        Ok((cols, rows)) => {
+                            let frame = encode_resize(slot, &Resize { cols, rows });
+                            if out.send(Outbound::Terminal(frame)).is_err() {
+                                break;
+                            }
+                        }
+                        Err(RecvError::Lagged(_)) => {} // 落后忽略，下次 resize 仍会推
+                        Err(RecvError::Closed) => break,
+                    },
                 }
             }
         });
@@ -499,11 +513,7 @@ impl Conn {
             Opcode::Input => {
                 let _ = self.core.write(&term_id, f.payload);
             }
-            Opcode::Resize => {
-                if let Ok(r) = decode_resize(f.payload) {
-                    let _ = self.core.resize(&term_id, r.cols, r.rows);
-                }
-            }
+            // Resize：远程仅镜像、不改 PTY 尺寸（桌面独占尺寸，避免拉锯压缩）；忽略
             _ => {}
         }
     }
