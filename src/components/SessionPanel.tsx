@@ -12,6 +12,9 @@ import SearchBox from "./ui/SearchBox";
 import ContextMenu, { MENU_SEP } from "./ui/ContextMenu";
 import { getSessionTitle, setSessionTitle, onSessionTitlesChange } from "../sessionTitles";
 import { getWsState, setWsState } from "../wsState";
+import { getSessionTags, getSessionTagIds, useTagStore, clearSession, sessionKey } from "../sessionTags";
+import { tagDot } from "../tagColors";
+import TagEditor from "./TagEditor";
 import claudeIcon from "../assets/claude.svg";
 import codexIcon from "../assets/codex.svg";
 
@@ -45,6 +48,9 @@ const AGENT_KEY = "htybox.sessionAgent.v1";
 const readAgent = (root: string): "claude" | "codex" =>
   getWsState<"claude" | "codex">(AGENT_KEY, root, "claude") === "codex" ? "codex" : "claude";
 
+// tag 筛选选中集合按工作区持久化（界面状态，scope=root；与 agent 选择同范式，符合"有状态选择按工作区"）。
+const FILTER_KEY = "htybox.sessionTagFilter.v1";
+
 // 会话自定义名（用户手动重命名覆盖显示）统一收口到 ../sessionTitles，与终端 Tab【共享同一份】：
 // 在 Session 列表重命名 ↔ 在终端 Tab 重命名 改的是同一会话名，两处显示一致（见 sessionTitles.ts）。
 
@@ -67,6 +73,19 @@ export default function SessionPanel({ root, workspaceId }: { root: string; work
   const [editing, setEditing] = useState<string | null>(null); // 正在重命名的会话键 "agentKind:id"
   const [draft, setDraft] = useState("");
   const cur = AGENTS.find((a) => a.k === agentKind) ?? AGENTS[0];
+  // —— tag ——：订阅整个 store，任意会话 tag 变化 → 重渲染（卡片 chips / 筛选 / 下拉计数实时）
+  const tagStore = useTagStore();
+  const vocab = tagStore.vocab;
+  const [tagEditor, setTagEditor] = useState<{ x: number; y: number; s: SessionRef } | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false); // tag 筛选下拉开关
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => getWsState<string[]>(FILTER_KEY, root, []));
+  useEffect(() => setSelectedTagIds(getWsState<string[]>(FILTER_KEY, root, [])), [root]); // 切工作区重载筛选
+  const setFilter = (ids: string[]) => {
+    setSelectedTagIds(ids);
+    setWsState(FILTER_KEY, root, ids);
+  };
+  const toggleFilter = (id: string) =>
+    setFilter(selectedTagIds.includes(id) ? selectedTagIds.filter((x) => x !== id) : [...selectedTagIds, id]);
 
   const load = (kind: "claude" | "codex") => {
     setList(null);
@@ -94,13 +113,23 @@ export default function SessionPanel({ root, workspaceId }: { root: string; work
       else await deleteCodexSession(s.path);
       // 乐观移除：直接从列表剔除该项，避免整列重载导致滚动条跳回顶部
       setList((prev) => (prev ? prev.filter((x) => x.id !== s.id) : prev));
+      clearSession(sessionKey(agentKind, s.id)); // 删除会话 → 清其 tag 关联（词表保留，供他会话用）
     } catch {
       /* ignore */
     }
   };
   const favKey = (s: SessionRef) => `${agentKind}:${s.id}`;
   const displayLabel = (s: SessionRef) => getSessionTitle(agentKind, s.id) || s.label;
-  const filtered = (list ?? []).filter((s) => searchMatch(q, displayLabel(s), s.id));
+  const tagNamesOf = (s: SessionRef) => getSessionTags(agentKind, s.id).map((t) => t.name);
+  const filtered = (list ?? []).filter((s) => {
+    if (!searchMatch(q, displayLabel(s), s.id, ...tagNamesOf(s))) return false;
+    // tag 筛选：OR（会话 tag 与选中集合有交集即显示）；空集合 = 不筛选
+    if (selectedTagIds.length > 0) {
+      const ids = getSessionTagIds(agentKind, s.id);
+      if (!selectedTagIds.some((tid) => ids.includes(tid))) return false;
+    }
+    return true;
+  });
   const isFav = (s: SessionRef) => favs.includes(favKey(s));
   const toggleFav = (s: SessionRef) => {
     const k = favKey(s);
@@ -150,6 +179,23 @@ export default function SessionPanel({ root, workspaceId }: { root: string; work
           <button onClick={() => resume(s)} title="复原此会话到终端" className="min-w-0 flex-1 cursor-pointer text-left">
             <div className="truncate text-[12px] text-[var(--text)]">{displayLabel(s)}</div>
             <div className="mt-0.5 text-[10px] text-[var(--text-3)]">{new Date(s.ts).toLocaleString()}</div>
+            {(() => {
+              const cardTags = getSessionTags(agentKind, s.id);
+              return cardTags.length > 0 ? (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {cardTags.map((t) => (
+                    <span
+                      key={t.id}
+                      className="inline-flex items-center gap-1 rounded-[4px] border px-1 py-px text-[10px] font-semibold"
+                      style={{ color: tagDot(t.color), borderColor: tagDot(t.color) + "66", backgroundColor: tagDot(t.color) + "22" }}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tagDot(t.color) }} />
+                      {t.name}
+                    </span>
+                  ))}
+                </div>
+              ) : null;
+            })()}
           </button>
         )}
         {!editingThis && (
@@ -226,6 +272,118 @@ export default function SessionPanel({ root, workspaceId }: { root: string; work
       </div>
       <div className="px-2.5 pt-2 pb-1.5">
         <SearchBox value={q} onChange={setQ} placeholder={`搜索 ${agentKind} 会话…`} />
+        {vocab.length > 0 && (
+          <div className="relative mt-1.5">
+            <button
+              onClick={() => setFilterOpen((v) => !v)}
+              className={
+                "flex w-full items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11.5px] transition-colors " +
+                (selectedTagIds.length > 0
+                  ? "border-[var(--accent-border)] bg-[var(--accent)]/10 text-[var(--text)]"
+                  : "border-[var(--border)] bg-[var(--elevated)] text-[var(--text-2)] hover:bg-[var(--surface-soft)]")
+              }
+            >
+              <svg className="h-3.5 w-3.5 shrink-0 text-[var(--text-2)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 5h18l-7 8v6l-4-2v-4z" />
+              </svg>
+              {selectedTagIds.length === 0 ? (
+                <>
+                  <span>标签筛选</span>
+                  <span className="ml-auto text-[10px] text-[var(--text-3)]">点击多选</span>
+                </>
+              ) : (
+                <>
+                  {(() => {
+                    const sel = vocab.filter((t) => selectedTagIds.includes(t.id));
+                    const shown = sel.slice(0, 3); // 首期固定前 3 个 + …+N（像素级自适应省略留打磨）
+                    const rest = sel.length - shown.length;
+                    return (
+                      <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+                        {shown.map((t) => (
+                          <span key={t.id} className="inline-flex shrink-0 items-center gap-1">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tagDot(t.color) }} />
+                            {t.name}
+                          </span>
+                        ))}
+                        {rest > 0 && <span className="shrink-0 text-[10px] font-semibold text-[var(--text-3)]">…+{rest}</span>}
+                      </span>
+                    );
+                  })()}
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFilter([]);
+                    }}
+                    title="清除筛选"
+                    className="shrink-0 px-0.5 leading-none text-[var(--text-3)] hover:text-[var(--text)]"
+                  >
+                    ✕
+                  </span>
+                </>
+              )}
+              <svg
+                className={"h-3 w-3 shrink-0 text-[var(--text-3)] transition-transform " + (filterOpen ? "rotate-180" : "")}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            {filterOpen && (
+              <>
+                <div className="fixed inset-0 z-[60]" onClick={() => setFilterOpen(false)} />
+                <div className="absolute top-full right-0 left-0 z-[61] mt-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--elevated)] py-1 shadow-xl">
+                  <div className="flex items-center justify-between px-3 py-1">
+                    <span className="text-[10px] font-bold tracking-wide text-[var(--text-2)]">按标签筛选</span>
+                    <span className="text-[10px] text-[var(--text-3)]">任一匹配 · OR</span>
+                  </div>
+                  <div className="my-1 border-t border-[var(--border-soft)]" />
+                  {vocab.map((t) => {
+                    const on = selectedTagIds.includes(t.id);
+                    const count = (list ?? []).filter((s) => getSessionTagIds(agentKind, s.id).includes(t.id)).length;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => toggleFilter(t.id)}
+                        className={
+                          "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11.5px] " +
+                          (on ? "bg-[var(--accent)]/5" : "hover:bg-[var(--surface)]")
+                        }
+                      >
+                        <span
+                          className={
+                            "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border " +
+                            (on ? "border-[var(--accent)] bg-[var(--accent)]" : "border-[var(--border)] bg-[var(--elevated)]")
+                          }
+                        >
+                          {on && (
+                            <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tagDot(t.color) }} />
+                        <span className="min-w-0 flex-1 truncate text-[var(--text-deep)]">{t.name}</span>
+                        <span className="shrink-0 text-[10px] text-[var(--text-3)]">{count}</span>
+                      </button>
+                    );
+                  })}
+                  <div className="my-1 border-t border-[var(--border-soft)]" />
+                  <div className="flex items-center justify-between px-3 py-0.5">
+                    <button onClick={() => setFilter([])} className="text-[10.5px] text-[var(--accent-text)] hover:underline">
+                      清除全部
+                    </button>
+                    <span className="text-[10px] text-[var(--text-3)]">已选 {selectedTagIds.length}</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2.5 pb-3">
         {list === null && <div className="pt-6 text-center text-[11px] text-[var(--text-3)]">加载中…</div>}
@@ -253,6 +411,7 @@ export default function SessionPanel({ root, workspaceId }: { root: string; work
           items={[
             { id: "resume", label: "复原到终端" },
             { id: "rename", label: "重命名" },
+            { id: "tags", label: "标签…" },
             { id: "fav", label: isFav(menu.s) ? "取消收藏" : "收藏" },
             MENU_SEP,
             { id: "delete", label: "删除会话（移入回收站）", danger: true },
@@ -260,10 +419,21 @@ export default function SessionPanel({ root, workspaceId }: { root: string; work
           onAction={(id) => {
             if (id === "resume") resume(menu.s);
             else if (id === "rename") startRename(menu.s);
+            else if (id === "tags") setTagEditor({ x: menu.x, y: menu.y, s: menu.s });
             else if (id === "fav") toggleFav(menu.s);
             else if (id === "delete") void del(menu.s);
           }}
           onClose={() => setMenu(null)}
+        />
+      )}
+      {tagEditor && (
+        <TagEditor
+          x={tagEditor.x}
+          y={tagEditor.y}
+          agentKind={agentKind}
+          sessionId={tagEditor.s.id}
+          sessionName={displayLabel(tagEditor.s)}
+          onClose={() => setTagEditor(null)}
         />
       )}
     </div>

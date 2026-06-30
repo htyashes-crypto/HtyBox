@@ -45,6 +45,8 @@ import { registerDockHost } from "../dockBus";
 import { captureSessionIds } from "../catalog";
 import { getSessionTitle, setSessionTitle, onSessionTitlesChange, splitStatusPrefix } from "../sessionTitles";
 import { pingAgentActivity, clearTerm } from "../agentStatus";
+import ContextMenu from "./ui/ContextMenu";
+import TagEditor from "./TagEditor";
 import type { RunConfig } from "../runConfigs";
 
 type TermParams = {
@@ -267,6 +269,8 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
   const [title, setTitle] = useState(props.api.title ?? "");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null); // Tab 右键菜单
+  const [tagEditor, setTagEditor] = useState<{ x: number; y: number } | null>(null); // 标签编辑器
   useEffect(() => {
     const d = props.api.onDidTitleChange((e) => setTitle(e.title));
     return () => d.dispose();
@@ -326,10 +330,24 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
     );
   }
 
+  // Tab 取会话标识（与 commit() 同款）：claude/codex 且 sid 已捕获才能打 tag；shell / sid 未就绪不可。
+  const p2 = props.params as TermParams & { editorPath?: string };
+  const sid = p2.termId ? SESSION_IDS[p2.termId] : undefined;
+  const canTag = !!sid && (p2.agentKind === "claude" || p2.agentKind === "codex");
+  const tabSessionName =
+    sid && (p2.agentKind === "claude" || p2.agentKind === "codex")
+      ? getSessionTitle(p2.agentKind, sid) || splitStatusPrefix(title)[1] || title
+      : title;
   return (
+    <>
     <div
       onDoubleClick={startRename}
-      title="双击重命名"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setMenu({ x: e.clientX, y: e.clientY });
+      }}
+      title="双击重命名 · 右键打标签"
       className="flex h-full items-center gap-2 px-2 text-xs"
     >
       <TabTypeIcon params={props.params as TermParams & { editorPath?: string }} />
@@ -349,6 +367,32 @@ function DockTab(props: IDockviewPanelHeaderProps<TermParams>) {
         ✕
       </span>
     </div>
+    {menu && (
+      <ContextMenu
+        x={menu.x}
+        y={menu.y}
+        items={[
+          { id: "rename", label: "重命名" },
+          { id: "tags", label: canTag ? "标签…" : "标签（会话初始化中…）" },
+        ]}
+        onAction={(id) => {
+          if (id === "rename") startRename();
+          else if (id === "tags" && canTag) setTagEditor({ x: menu.x, y: menu.y });
+        }}
+        onClose={() => setMenu(null)}
+      />
+    )}
+    {tagEditor && canTag && (
+      <TagEditor
+        x={tagEditor.x}
+        y={tagEditor.y}
+        agentKind={p2.agentKind as "claude" | "codex"}
+        sessionId={sid as string}
+        sessionName={tabSessionName}
+        onClose={() => setTagEditor(null)}
+      />
+    )}
+    </>
   );
 }
 

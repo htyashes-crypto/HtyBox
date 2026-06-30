@@ -14,6 +14,7 @@ import { disposeByPrefix } from "./components/terminalEngine";
 import { launchAgents, type AgentSpec } from "./mcp";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import UpdateModal from "./components/UpdateModal";
 import HtyBoxLogo from "./components/ui/HtyBoxLogo";
 import { checkForUpdate, getSkippedVersion, setSkippedVersion, type Update } from "./updater";
@@ -171,6 +172,7 @@ export default function App() {
   const [sbAnimating, setSbAnimating] = useState(false); // 收起/展开动画期间给容器加过渡 class
   const [update, setUpdate] = useState<Update | null>(null); // 可用更新（null=无）
   const [showUpdate, setShowUpdate] = useState(false); // 更新弹窗开关
+  const [appVersion, setAppVersion] = useState(""); // 应用真实版本号（来自打包进二进制的 tauri.conf.json）
   const [wsMenu, setWsMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [, forceStatusTick] = useReducer((x: number) => x + 1, 0); // agentStatus 变化 → 重渲染顶栏
 
@@ -201,6 +203,11 @@ export default function App() {
       activeId,
     }).catch(() => {});
   }, [openWs, activeId]);
+
+  // 读取应用真实版本号（运行时从二进制内的 tauri.conf.json 取），供底部状态栏显示
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {});
+  }, []);
 
   // 启动检查更新：有可用更新 → 记下；未被「跳过」则自动弹窗（端点不可达/离线静默忽略）
   useEffect(() => {
@@ -493,7 +500,7 @@ export default function App() {
         <div className="flex h-6 shrink-0 items-center gap-2 border-t border-[var(--border)] bg-[var(--surface)] px-3 text-[10px] text-[var(--text-faint)]">
           <span className="truncate font-mono">{active.path}</span>
           <span className="ml-auto shrink-0">
-            {openWs.length} 个工作区 · HtyBox v0.1
+            {openWs.length} 个工作区 · HtyBox{appVersion ? ` v${appVersion}` : ""}
           </span>
         </div>
       )}
